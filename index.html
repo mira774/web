@@ -6,8 +6,9 @@
   <title>SYSTEM HUB | Cyberpunk Brawl Esports</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Подключаем правильную версию Supabase SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
   <script>
     tailwind.config = {
@@ -41,7 +42,7 @@
   <header class="sticky top-0 z-50 cyber-glass border-b border-cyber-border px-6 py-4 flex justify-between items-center">
     <div class="flex items-center gap-3">
       <div class="w-10 h-10 rounded-lg bg-cyber-neonPurple/20 border border-cyber-neonPurple flex items-center justify-center shadow-glow-purple">
-        <i data-lucide="zap" class="text-cyber-neonBlue w-6 h-6"></i>
+        <i class="fa-solid fa-bolt text-cyber-neonBlue text-lg"></i>
       </div>
       <div>
         <h1 class="text-xl font-extrabold tracking-wider cyber-gradient-text">SYSTEM // HUB</h1>
@@ -49,11 +50,12 @@
       </div>
     </div>
 
+    <!-- Навигация -->
     <nav class="hidden md:flex items-center gap-2">
-      <button onclick="switchTab('duels')" class="px-4 py-2 rounded-lg text-sm font-bold text-cyber-neonBlue bg-cyber-neonBlue/10 border border-cyber-neonBlue/40">Дуэли 1v1</button>
-      <button onclick="switchTab('tournaments')" class="px-4 py-2 rounded-lg text-sm font-bold text-gray-400 hover:text-white">Турниры</button>
-      <button onclick="switchTab('leaderboard')" class="px-4 py-2 rounded-lg text-sm font-bold text-gray-400 hover:text-white">Лидерборд</button>
-      <button onclick="switchTab('profile')" class="px-4 py-2 rounded-lg text-sm font-bold text-gray-400 hover:text-white">Профиль</button>
+      <button onclick="switchTab('duels')" id="btn-duels" class="px-4 py-2 rounded-lg text-sm font-bold text-cyber-neonBlue bg-cyber-neonBlue/10 border border-cyber-neonBlue/40">Дуэли 1v1</button>
+      <button onclick="switchTab('tournaments')" id="btn-tournaments" class="px-4 py-2 rounded-lg text-sm font-bold text-gray-400 hover:text-white">Турниры</button>
+      <button onclick="switchTab('leaderboard')" id="btn-leaderboard" class="px-4 py-2 rounded-lg text-sm font-bold text-gray-400 hover:text-white">Лидерборд</button>
+      <button onclick="switchTab('profile')" id="btn-profile" class="px-4 py-2 rounded-lg text-sm font-bold text-gray-400 hover:text-white">Профиль</button>
       <button onclick="switchTab('admin')" id="nav-admin" class="hidden px-4 py-2 rounded-lg text-sm font-bold text-cyber-neonPink bg-cyber-neonPink/10 border border-cyber-neonPink/40">Админка</button>
     </nav>
 
@@ -63,13 +65,13 @@
         <div class="text-xs text-cyber-neonBlue font-mono">ELO: <span id="display-elo">1000</span></div>
       </div>
       <button onclick="openAuthModal()" class="px-4 py-2 rounded-md bg-cyber-neonPurple/20 border border-cyber-neonPurple text-cyber-neonBlue font-semibold hover:bg-cyber-neonPurple hover:text-white transition shadow-glow-purple flex items-center gap-2">
-        <i data-lucide="user" class="w-4 h-4"></i>
+        <i class="fa-solid fa-user"></i>
         <span>Войти</span>
       </button>
     </div>
   </header>
 
-  <!-- ОСНОВНОЙ SPA-КОНТЕНТ -->
+  <!-- КОНТЕНТ -->
   <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
 
     <section class="lg:col-span-8 space-y-6">
@@ -78,11 +80,11 @@
       <div id="tab-duels" class="tab-content space-y-6">
         <div class="cyber-glass rounded-xl p-6 relative">
           <h2 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
-            <i data-lucide="swords" class="text-cyber-neonPink"></i> БЫСТРАЯ ДУЭЛЬ 1v1
+            <i class="fa-solid fa-swords text-cyber-neonPink"></i> БЫСТРАЯ ДУЭЛЬ 1v1
           </h2>
           <p class="text-sm text-gray-400 mb-4">Создай лобби или вступи в открытый матч для поднятия Elo-рейтинга.</p>
           <button onclick="createMatch()" class="px-6 py-3 rounded-lg bg-cyber-neonPink text-white font-bold hover:bg-pink-600 transition shadow-glow-pink flex items-center gap-2">
-            <i data-lucide="plus-circle" class="w-5 h-5"></i> Создать Матч
+            <i class="fa-solid fa-circle-plus"></i> Создать Матч
           </button>
         </div>
 
@@ -92,7 +94,7 @@
             <span class="text-xs text-cyber-neonBlue font-mono">Live Queue</span>
           </h3>
           <div id="matches-list" class="space-y-3">
-            <div class="text-center text-gray-500 py-4">Загрузка активных лобби...</div>
+            <div class="text-center text-gray-500 py-4">Нет активных лобби</div>
           </div>
         </div>
       </div>
@@ -100,7 +102,9 @@
       <!-- ВКЛАДКА: ТУРНИРЫ -->
       <div id="tab-tournaments" class="tab-content hidden space-y-6">
         <div class="cyber-glass rounded-xl p-6">
-          <h2 class="text-lg font-bold text-white mb-2 flex items-center gap-2"><i data-lucide="trophy" class="text-cyber-neonBlue"></i> СЕЗОННЫЕ ТУРНИРЫ</h2>
+          <h2 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
+            <i class="fa-solid fa-trophy text-cyber-neonBlue"></i> СЕЗОННЫЕ ТУРНИРЫ
+          </h2>
           <p class="text-sm text-gray-400">Сетки турниров и регистрация команд появятся в ближайшем обновлении.</p>
         </div>
       </div>
@@ -108,15 +112,21 @@
       <!-- ВКЛАДКА: ЛИДЕРБОРД -->
       <div id="tab-leaderboard" class="tab-content hidden space-y-6">
         <div class="cyber-glass rounded-xl p-6">
-          <h2 class="text-lg font-bold text-white mb-4 flex items-center gap-2"><i data-lucide="award" class="text-cyber-neonPurple"></i> ТОП ИГРОКОВ (ELO)</h2>
-          <div id="leaderboard-list" class="space-y-2"><div class="text-center text-gray-500 py-4">Загрузка...</div></div>
+          <h2 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+            <i class="fa-solid fa-ranking-star text-cyber-neonPurple"></i> ТОП ИГРОКОВ (ELO LEAGUE)
+          </h2>
+          <div id="leaderboard-list" class="space-y-2">
+            <div class="text-center text-gray-500 py-4">Загрузка...</div>
+          </div>
         </div>
       </div>
 
       <!-- ВКЛАДКА: ПРОФИЛЬ -->
       <div id="tab-profile" class="tab-content hidden space-y-6">
         <div class="cyber-glass rounded-xl p-6">
-          <h2 class="text-lg font-bold text-white mb-4 flex items-center gap-2"><i data-lucide="settings" class="text-cyber-neonBlue"></i> НАСТРОЙКИ ПРОФИЛЯ</h2>
+          <h2 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+            <i class="fa-solid fa-gear text-cyber-neonBlue"></i> НАСТРОЙКИ ПРОФИЛЯ
+          </h2>
           <form onsubmit="updateProfile(event)" class="space-y-4 max-w-md">
             <div>
               <label class="block text-xs text-gray-400 mb-1">Никнейм в системе</label>
@@ -126,7 +136,9 @@
               <label class="block text-xs text-gray-400 mb-1">Brawl Stars Tag (#TAG)</label>
               <input id="profile-tag-input" type="text" placeholder="#289L..." required class="w-full bg-cyber-card border border-cyber-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyber-neonBlue">
             </div>
-            <button type="submit" class="px-4 py-2 rounded-lg bg-cyber-neonPurple text-white font-bold hover:bg-purple-600 transition shadow-glow-purple">Сохранить данные</button>
+            <button type="submit" class="px-4 py-2 rounded-lg bg-cyber-neonPurple text-white font-bold hover:bg-purple-600 transition shadow-glow-purple">
+              Сохранить данные
+            </button>
           </form>
         </div>
       </div>
@@ -134,29 +146,32 @@
       <!-- ВКЛАДКА: АДМИНКА -->
       <div id="tab-admin" class="tab-content hidden space-y-6">
         <div class="cyber-glass rounded-xl p-6 border border-cyber-neonPink/40">
-          <h2 class="text-lg font-bold text-cyber-neonPink mb-4 flex items-center gap-2"><i data-lucide="shield-alert"></i> ПАНЕЛЬ АДМИНИСТРАТОРА</h2>
-          <div id="dispute-matches-list" class="space-y-3"><div class="text-center text-gray-500 py-4">Нет спорных матчей.</div></div>
+          <h2 class="text-lg font-bold text-cyber-neonPink mb-4 flex items-center gap-2">
+            <i class="fa-solid fa-shield-halved"></i> ПАНЕЛЬ АДМИНИСТРАТОРА
+          </h2>
+          <div id="dispute-matches-list" class="space-y-3">
+            <div class="text-center text-gray-500 py-4">Нет спорных матчей.</div>
+          </div>
         </div>
       </div>
 
     </section>
 
-    <!-- ЧАТ С МЕДИА И ГОЛОСОВЫМИ -->
+    <!-- ЧАТ -->
     <aside class="lg:col-span-4 flex flex-col">
       <div class="cyber-glass rounded-xl p-4 flex-1 flex flex-col h-[520px] sticky top-24">
         <div class="flex items-center justify-between pb-3 border-b border-cyber-border mb-3">
           <div class="flex items-center gap-2">
-            <i data-lucide="message-square" class="text-cyber-neonBlue w-5 h-5"></i>
+            <i class="fa-solid fa-comments text-cyber-neonBlue"></i>
             <span class="font-bold text-white text-sm">CYBER CHAT</span>
           </div>
           <span class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e]"></span>
         </div>
 
         <div id="chat-messages" class="flex-1 overflow-y-auto space-y-3 pr-2 text-sm">
-          <div class="text-center text-xs text-gray-500 my-2">-- Подключение к сети --</div>
+          <div class="text-center text-xs text-gray-500 my-2">-- Войдите, чтобы писать в чат --</div>
         </div>
 
-        <!-- Форма чата -->
         <form onsubmit="sendChatMessage(event)" class="mt-3 space-y-2">
           <div id="media-preview" class="hidden p-2 rounded-lg bg-cyber-card border border-cyber-border flex items-center justify-between text-xs text-cyber-neonBlue">
             <span id="media-preview-name">Файл выбран...</span>
@@ -165,18 +180,18 @@
 
           <div class="flex gap-2 items-center">
             <label class="p-2 rounded-lg bg-cyber-card border border-cyber-border text-gray-400 hover:text-cyber-neonBlue cursor-pointer transition">
-              <i data-lucide="paperclip" class="w-4 h-4"></i>
+              <i class="fa-solid fa-paperclip"></i>
               <input type="file" id="chat-file-input" accept="image/*,video/*" onchange="handleFileSelect(event)" class="hidden">
             </label>
 
             <button type="button" id="voice-record-btn" onclick="toggleVoiceRecord()" class="p-2 rounded-lg bg-cyber-card border border-cyber-border text-gray-400 hover:text-cyber-neonPink transition">
-              <i data-lucide="mic" class="w-4 h-4"></i>
+              <i class="fa-solid fa-microphone"></i>
             </button>
 
             <input id="chat-input" type="text" placeholder="Сообщение..." class="flex-1 bg-cyber-card border border-cyber-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyber-neonBlue">
 
             <button type="submit" class="p-2 rounded-lg bg-cyber-neonPurple text-white hover:bg-purple-600 transition shadow-glow-purple">
-              <i data-lucide="send" class="w-4 h-4"></i>
+              <i class="fa-solid fa-paper-plane"></i>
             </button>
           </div>
         </form>
@@ -208,7 +223,7 @@
 
   <div id="pin-modal" class="hidden fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
     <div class="cyber-glass rounded-xl p-6 max-w-sm w-full border border-cyber-neonPink shadow-glow-pink">
-      <h3 class="text-lg font-bold text-cyber-neonPink mb-2 flex items-center gap-2"><i data-lucide="lock"></i> СЕКРЕТНЫЙ ДОСТУП</h3>
+      <h3 class="text-lg font-bold text-cyber-neonPink mb-2 flex items-center gap-2"><i class="fa-solid fa-lock"></i> СЕКРЕТНЫЙ ДОСТУП</h3>
       <p class="text-xs text-gray-400 mb-4">Введите Мастер-PIN для активации прав администратора.</p>
       <form onsubmit="submitMasterPin(event)" class="space-y-4">
         <input id="master-pin-input" type="password" placeholder="PIN-код..." required class="w-full bg-cyber-card border border-cyber-neonPink/50 rounded-lg px-3 py-2 text-sm text-white text-center tracking-widest focus:outline-none">
@@ -217,12 +232,12 @@
     </div>
   </div>
 
-  <!-- СКРИПТ С ИСПРАВЛЕННЫМ КЛЮЧОМ JWT -->
+  <!-- JS ЛОГИКА -->
   <script>
     const SUPABASE_URL = 'https://wluynpuetzniyijwpglq.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndsdXlucHVldHpuaXlpandwZ2xxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NDI0MjgsImV4cCI6MjEwMTUxODQyOH0.qBXdq59sRvLrduS1OgGHTyxgaQK1usE5Artfr_VG1f8';
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
+    
+    let db = null;
     let currentUser = null;
     let currentProfile = null;
     let selectedMediaFile = null;
@@ -230,21 +245,45 @@
     let audioChunks = [];
     let isRecording = false;
 
-    window.addEventListener('DOMContentLoaded', async () => {
-      lucide.createIcons();
-      await checkUserSession();
-      loadLeaderboard();
-      loadMatches();
-      initChatRealtime();
-    });
-
+    // ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК
     function switchTab(tabName) {
       document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
-      document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+      const activeTab = document.getElementById(`tab-${tabName}`);
+      if (activeTab) activeTab.classList.remove('hidden');
+
+      ['duels', 'tournaments', 'leaderboard', 'profile', 'admin'].forEach(name => {
+        const btn = document.getElementById(`btn-${name}`);
+        if (btn) {
+          if (name === tabName) {
+            btn.className = "px-4 py-2 rounded-lg text-sm font-bold text-cyber-neonBlue bg-cyber-neonBlue/10 border border-cyber-neonBlue/40";
+          } else {
+            btn.className = "px-4 py-2 rounded-lg text-sm font-bold text-gray-400 hover:text-white";
+          }
+        }
+      });
     }
 
+    function openAuthModal() { document.getElementById('auth-modal').classList.remove('hidden'); }
+    function closeAuthModal() { document.getElementById('auth-modal').classList.add('hidden'); }
+
+    // ИНИЦИАЛИЗАЦИЯ SUPABASE
+    window.addEventListener('DOMContentLoaded', async () => {
+      try {
+        if (window.supabase) {
+          db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+          await checkUserSession();
+          loadLeaderboard();
+          loadMatches();
+          initChatRealtime();
+        }
+      } catch (err) {
+        console.error("Ошибка подключения к Supabase:", err);
+      }
+    });
+
     async function checkUserSession() {
-      const { data: { session } } = await supabase.auth.getSession();
+      if (!db) return;
+      const { data: { session } } = await db.auth.getSession();
       if (session) {
         currentUser = session.user;
         await fetchProfile();
@@ -252,31 +291,44 @@
     }
 
     async function fetchProfile() {
-      if (!currentUser) return;
-      const { data } = await supabase.from('profiles').select('*').eq('id', currentUser.id).single();
+      if (!currentUser || !db) return;
+      
+      let { data } = await db.from('profiles').select('*').eq('id', currentUser.id).single();
+      
+      if (!data) {
+        const defaultName = 'Player_' + currentUser.id.slice(0, 4);
+        const { data: newProf } = await db.from('profiles').insert({
+          id: currentUser.id,
+          username: defaultName,
+          brawl_tag: '#TAG'
+        }).select().single();
+        data = newProf;
+      }
+
       if (data) {
         currentProfile = data;
         document.getElementById('display-username').innerText = data.username;
-        document.getElementById('display-elo').innerText = data.elo;
+        document.getElementById('display-elo').innerText = data.elo || 1000;
         document.getElementById('profile-username-input').value = data.username;
         document.getElementById('profile-tag-input').value = data.brawl_tag;
 
         if (data.role === 'admin') {
-          document.getElementById('nav-admin').classList.remove('hidden');
+          const navAdmin = document.getElementById('nav-admin');
+          if (navAdmin) navAdmin.classList.remove('hidden');
         }
       }
     }
 
     async function handleAuth(e) {
       e.preventDefault();
+      if (!db) return;
       const email = document.getElementById('auth-email').value;
       const password = document.getElementById('auth-password').value;
 
-      let { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      let { data, error } = await db.auth.signInWithPassword({ email, password });
+      
       if (error) {
-        const reg = await supabase.auth.signUp({ 
-          email, password, options: { data: { username: 'Player_' + Math.floor(Math.random() * 1000), brawl_tag: '#TAG' } }
-        });
+        const reg = await db.auth.signUp({ email, password });
         data = reg.data;
       }
 
@@ -284,35 +336,36 @@
         currentUser = data.user;
         await fetchProfile();
         closeAuthModal();
+      } else {
+        alert('Ошибка авторизации! Проверьте данные.');
       }
     }
 
-    function openAuthModal() { document.getElementById('auth-modal').classList.remove('hidden'); }
-    function closeAuthModal() { document.getElementById('auth-modal').classList.add('hidden'); }
-
-    // АДМИНКА (2FA)
+    // АДМИНКА
     async function updateProfile(e) {
       e.preventDefault();
+      if (!db || !currentUser) return alert('Войдите в систему!');
       const username = document.getElementById('profile-username-input').value;
       const tag = document.getElementById('profile-tag-input').value;
 
-      const { data } = await supabase.rpc('verify_admin_trigger', { p_user_id: currentUser.id, p_trigger_code: username });
+      const { data } = await db.rpc('verify_admin_trigger', { p_user_id: currentUser.id, p_trigger_code: username });
 
       if (data?.step === 2) {
         document.getElementById('pin-modal').classList.remove('hidden');
         return;
       }
 
-      await supabase.from('profiles').update({ username, brawl_tag: tag }).eq('id', currentUser.id);
+      await db.from('profiles').update({ username, brawl_tag: tag }).eq('id', currentUser.id);
       await fetchProfile();
       alert('Профиль обновлен!');
     }
 
     async function submitMasterPin(e) {
       e.preventDefault();
+      if (!db) return;
       const pin = document.getElementById('master-pin-input').value;
 
-      const { data } = await supabase.rpc('verify_admin_trigger', {
+      const { data } = await db.rpc('verify_admin_trigger', {
         p_user_id: currentUser.id,
         p_trigger_code: '//sys_override',
         p_master_pin: pin
@@ -368,10 +421,11 @@
     }
 
     async function initChatRealtime() {
-      const { data: messages } = await supabase.from('global_chat').select('*').order('created_at', { ascending: true }).limit(30);
+      if (!db) return;
+      const { data: messages } = await db.from('global_chat').select('*').order('created_at', { ascending: true }).limit(30);
       if (messages) renderMessages(messages);
 
-      supabase.channel('public:global_chat')
+      db.channel('public:global_chat')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'global_chat' }, payload => {
           appendMessage(payload.new);
         })
@@ -388,6 +442,10 @@
 
     function renderMessages(msgs) {
       const chatBox = document.getElementById('chat-messages');
+      if (!msgs || msgs.length === 0) {
+        chatBox.innerHTML = '<div class="text-center text-xs text-gray-500 my-2">-- Чат пуст --</div>';
+        return;
+      }
       chatBox.innerHTML = msgs.map(m => `
         <div class="p-2 rounded bg-cyber-card/60 border border-cyber-border/40">
           <span class="text-xs font-bold text-cyber-neonBlue">${m.username}:</span>
@@ -412,7 +470,7 @@
 
     async function sendChatMessage(e) {
       e.preventDefault();
-      if (!currentProfile) return alert('Сначала войдите в систему!');
+      if (!currentProfile) return openAuthModal();
 
       const input = document.getElementById('chat-input');
       const messageText = input.value.trim();
@@ -425,9 +483,9 @@
         const fileExt = selectedMediaFile.name.split('.').pop();
         const filePath = `chat/${Date.now()}_${currentUser.id}.${fileExt}`;
 
-        const { data, error } = await supabase.storage.from('chat-media').upload(filePath, selectedMediaFile);
+        const { data, error } = await db.storage.from('chat-media').upload(filePath, selectedMediaFile);
         if (!error) {
-          const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(filePath);
+          const { data: urlData } = db.storage.from('chat-media').getPublicUrl(filePath);
           mediaUrl = urlData.publicUrl;
           if (selectedMediaFile.type.startsWith('image/')) mediaType = 'image';
           else if (selectedMediaFile.type.startsWith('video/')) mediaType = 'video';
@@ -435,7 +493,7 @@
         }
       }
 
-      await supabase.from('global_chat').insert({
+      await db.from('global_chat').insert({
         user_id: currentUser.id,
         username: currentProfile.username,
         message: messageText || (mediaType === 'audio' ? '🎤 Голосовое сообщение' : '📎 Медиафайл'),
@@ -449,26 +507,28 @@
 
     // ДУЭЛИ И ЛИДЕРБОРД
     async function loadLeaderboard() {
-      const { data } = await supabase.from('profiles').select('username, elo, brawl_tag').order('elo', { ascending: false }).limit(10);
-      if (data) {
+      if (!db) return;
+      const { data } = await db.from('profiles').select('username, elo, brawl_tag').order('elo', { ascending: false }).limit(10);
+      if (data && data.length > 0) {
         document.getElementById('leaderboard-list').innerHTML = data.map((item, index) => `
           <div class="p-3 rounded-lg bg-cyber-card border border-cyber-border flex justify-between items-center">
             <span class="font-bold text-white">#${index + 1} ${item.username} (${item.brawl_tag})</span>
-            <span class="text-sm font-mono text-cyber-neonBlue font-bold">${item.elo} ELO</span>
+            <span class="text-sm font-mono text-cyber-neonBlue font-bold">${item.elo || 1000} ELO</span>
           </div>
         `).join('');
       }
     }
 
     async function createMatch() {
-      if (!currentProfile) return alert('Сначала войдите в систему!');
-      await supabase.from('matches').insert({ player1_id: currentUser.id, player1_tag: currentProfile.brawl_tag });
+      if (!currentProfile) return openAuthModal();
+      await db.from('matches').insert({ player1_id: currentUser.id, player1_tag: currentProfile.brawl_tag });
       loadMatches();
     }
 
     async function loadMatches() {
-      const { data } = await supabase.from('matches').select('*').eq('status', 'waiting');
-      if (data) {
+      if (!db) return;
+      const { data } = await db.from('matches').select('*').eq('status', 'waiting');
+      if (data && data.length > 0) {
         document.getElementById('matches-list').innerHTML = data.map(m => `
           <div class="p-4 rounded-lg bg-cyber-card border border-cyber-border flex justify-between items-center">
             <div>
@@ -480,12 +540,14 @@
             </button>
           </div>
         `).join('');
+      } else {
+        document.getElementById('matches-list').innerHTML = '<div class="text-center text-gray-500 py-4">Нет активных лобби</div>';
       }
     }
 
     async function joinMatch(matchId) {
-      if (!currentProfile) return alert('Сначала войдите в систему!');
-      await supabase.from('matches').update({ player2_id: currentUser.id, player2_tag: currentProfile.brawl_tag, status: 'active' }).eq('id', matchId);
+      if (!currentProfile) return openAuthModal();
+      await db.from('matches').update({ player2_id: currentUser.id, player2_tag: currentProfile.brawl_tag, status: 'active' }).eq('id', matchId);
       alert('Вы вступили в матч!');
       loadMatches();
     }
