@@ -1,554 +1,494 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" class="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HUB // Ultimate Telegram Style</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <style>
-        :root {
-            --bg-main: #0e1621;
-            --bg-panel: #17212b;
-            --bg-msg-mine: #2b5278;
-            --bg-msg-other: #182533;
-            --text-main: #f5f5f5;
-            --text-muted: #7f91a4;
-            --accent: #5288c1;
-            --accent-hover: #6098d6;
-            --danger: #e66060;
-            --border: #242f3d;
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SYSTEM HUB | Cyberpunk Brawl Esports</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            cyber: { bg: '#08080c', card: '#101018', border: '#1f1f2e', neonBlue: '#00f0ff', neonPink: '#ff0055', neonPurple: '#7000ff' }
+          },
+          boxShadow: {
+            'glow-blue': '0 0 15px rgba(0, 240, 255, 0.4)',
+            'glow-pink': '0 0 15px rgba(255, 0, 85, 0.4)',
+            'glow-purple': '0 0 20px rgba(112, 0, 255, 0.3)',
+          }
         }
+      }
+    }
+  </script>
 
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; user-select: none; }
-        body { background: var(--bg-main); color: var(--text-main); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
-        
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #3f4a5a; border-radius: 10px; }
-
-        .screen { display: none; width: 100%; height: 100%; flex-direction: column; animation: fadeIn 0.3s ease; }
-        .screen.active { display: flex; }
-
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes slideUp { from { transform: translateY(15px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
-        /* AUTH SCREEN */
-        #auth-screen { justify-content: center; align-items: center; background: #0e1621; z-index: 1000; }
-        .auth-box { background: var(--bg-panel); padding: 30px; border-radius: 16px; width: 90%; max-width: 400px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; }
-        .auth-box h2 { margin-bottom: 20px; color: var(--accent); }
-        .input-group { margin-bottom: 15px; text-align: left; }
-        .input-group label { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px; }
-        .tg-input { width: 100%; background: var(--bg-main); border: 1px solid var(--border); color: #fff; padding: 12px 16px; border-radius: 10px; outline: none; transition: 0.2s; font-size: 0.95rem; }
-        .tg-input:focus { border-color: var(--accent); }
-        .tg-btn { width: 100%; background: var(--accent); color: #fff; border: none; padding: 14px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: 0.2s; font-size: 1rem; margin-top: 10px; }
-        .tg-btn:hover { background: var(--accent-hover); }
-
-        /* MAIN APP */
-        header { background: var(--bg-panel); height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-        .header-profile { display: flex; align-items: center; gap: 10px; }
-        .avatar-sm { width: 38px; height: 38px; border-radius: 50%; background: var(--border); object-fit: cover; }
-        .header-title { font-weight: 600; font-size: 1.05rem; display: flex; flex-direction: column; }
-        .header-title span { font-size: 0.75rem; color: var(--text-muted); font-weight: 400; }
-        
-        .nav-tabs { display: flex; gap: 15px; }
-        .tab-btn { background: transparent; border: none; color: var(--text-muted); font-weight: 500; cursor: pointer; font-size: 0.9rem; padding: 5px 0; position: relative; }
-        .tab-btn.active { color: var(--accent); }
-        .tab-btn.active::after { content: ''; position: absolute; bottom: -18px; left: 0; width: 100%; height: 3px; background: var(--accent); border-radius: 3px 3px 0 0; }
-
-        .main-content { flex: 1; overflow: hidden; position: relative; display: flex; flex-direction: column; }
-        .tab-content { display: none; height: 100%; width: 100%; flex-direction: column; overflow-y: auto; padding: 20px; }
-        .tab-content.active { display: flex; animation: fadeIn 0.2s ease; }
-
-        /* CHAT STYLES */
-        #tab-chat { padding: 0; background: var(--bg-main); }
-        .chat-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
-        
-        .msg-row { display: flex; align-items: flex-end; gap: 8px; max-width: 85%; animation: slideUp 0.2s ease-out forwards; }
-        .msg-row.mine { align-self: flex-end; flex-direction: row-reverse; }
-        
-        .msg-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
-        .msg-row.mine .msg-avatar { display: none; }
-
-        .msg-bubble { background: var(--bg-msg-other); padding: 10px 14px; border-radius: 16px 16px 16px 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.2); position: relative; display: flex; flex-direction: column; gap: 4px; max-width: 100%; }
-        .msg-row.mine .msg-bubble { background: var(--bg-msg-mine); border-radius: 16px 16px 4px 16px; }
-        
-        .msg-author { font-size: 0.75rem; font-weight: 600; color: var(--accent); }
-        .msg-row.mine .msg-author { display: none; }
-        
-        .msg-text { font-size: 0.95rem; line-height: 1.4; word-break: break-word; user-select: text; }
-        .msg-meta { font-size: 0.65rem; color: rgba(255,255,255,0.5); align-self: flex-end; margin-top: 2px; }
-
-        .room-link { color: #38bdf8; cursor: pointer; font-weight: 500; text-decoration: underline; text-decoration-color: rgba(56,189,248,0.4); }
-        .room-link:hover { color: #7dd3fc; }
-
-        /* MEDIA IN CHAT */
-        audio { height: 32px; max-width: 220px; border-radius: 8px; }
-        video { max-width: 240px; border-radius: 8px; margin-top: 4px; }
-        .img-preview { max-width: 220px; border-radius: 8px; margin-top: 4px; cursor: pointer; }
-
-        .chat-input-area { background: var(--bg-panel); padding: 12px 20px; display: flex; gap: 10px; align-items: flex-end; border-top: 1px solid var(--border); }
-        .chat-input-area textarea { flex: 1; background: var(--bg-main); border: 1px solid var(--border); color: #fff; padding: 12px 16px; border-radius: 20px; resize: none; max-height: 120px; min-height: 44px; outline: none; font-size: 0.95rem; }
-        
-        .media-btn-group { display: flex; gap: 6px; align-items: center; }
-        .tool-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem; padding: 8px; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
-        .tool-btn:hover { color: var(--accent); }
-        .tool-btn.recording { color: var(--danger); animation: pulse 1s infinite; }
-
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
-
-        .btn-send { background: var(--accent); border: none; width: 44px; height: 44px; border-radius: 50%; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; flex-shrink: 0; }
-        .btn-send:hover { background: var(--accent-hover); transform: scale(1.05); }
-
-        /* GAMES & PROFILE */
-        .card { background: var(--bg-panel); padding: 20px; border-radius: 14px; margin-bottom: 15px; border: 1px solid var(--border); }
-        .bs-btn { display: inline-flex; align-items: center; justify-content: center; background: #facc15; color: #000; font-weight: 700; text-decoration: none; padding: 12px 16px; border-radius: 10px; margin-top: 10px; width: 100%; transition: 0.2s; cursor: pointer; border: none; font-size: 0.95rem; }
-        .bs-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
-
-        /* MODALS & DEV */
-        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); backdrop-filter: blur(5px); z-index: 2000; display: none; justify-content: center; align-items: center; }
-        .modal.active { display: flex; animation: fadeIn 0.2s; }
-        .modal-content { background: var(--bg-panel); padding: 24px; border-radius: 16px; width: 90%; max-width: 400px; border: 1px solid var(--border); }
-        
-        .dev-actions { display: flex; gap: 5px; margin-top: 5px; }
-        .dev-btn { background: rgba(0,0,0,0.3); border: none; color: #fff; font-size: 0.75rem; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
-        .dev-btn.del { color: var(--danger); }
-        .dev-btn:hover { background: rgba(255,255,255,0.1); }
-    </style>
+  <style>
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #08080c; }
+    ::-webkit-scrollbar-thumb { background: #7000ff; border-radius: 3px; }
+    .cyber-glass { background: rgba(16, 16, 24, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(112, 0, 255, 0.2); }
+    .cyber-gradient-text { background: linear-gradient(135deg, #00f0ff 0%, #ff0055 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  </style>
 </head>
-<body>
+<body class="bg-cyber-bg text-gray-200 font-sans min-h-screen flex flex-col antialiased">
 
-    <!-- AUTH SCREEN -->
-    <div id="auth-screen" class="screen">
-        <div class="auth-box">
-            <h2>Регистрация в HUB</h2>
-            <div class="input-group">
-                <label>Отображаемый ник</label>
-                <input type="text" id="reg-sitenick" class="tg-input" placeholder="Miralim">
-            </div>
-            <div class="input-group">
-                <label>Игровой ник (Brawl Stars)</label>
-                <input type="text" id="reg-gamenick" class="tg-input" placeholder="Ник в игре">
-            </div>
-            <div class="input-group">
-                <label>Игровой Тег (Без #)</label>
-                <input type="text" id="reg-tag" class="tg-input" placeholder="2Q8L9CGY">
-            </div>
-            <button class="tg-btn" onclick="registerUser()">Войти в систему</button>
-        </div>
+  <!-- ШАПКА -->
+  <header class="sticky top-0 z-50 cyber-glass border-b border-cyber-border px-6 py-4 flex justify-between items-center">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg bg-cyber-neonPurple/20 border border-cyber-neonPurple flex items-center justify-center shadow-glow-purple">
+        <i data-lucide="zap" class="text-cyber-neonBlue w-6 h-6"></i>
+      </div>
+      <div>
+        <h1 class="text-xl font-extrabold tracking-wider cyber-gradient-text">SYSTEM // HUB</h1>
+        <p class="text-xs text-gray-400">BRAWL STARS ESPORTS CYBERNET</p>
+      </div>
     </div>
 
-    <!-- MAIN APP SCREEN -->
-    <div id="app-screen" class="screen">
-        <header>
-            <div class="header-profile">
-                <img id="header-avatar" src="" class="avatar-sm" alt="avatar">
-                <div class="header-title" id="room-header-title">
-                    Global Chat
-                    <span id="room-header-subtitle">Supabase Connected</span>
-                </div>
-            </div>
-            <div class="nav-tabs">
-                <button class="tab-btn active" onclick="switchTab('chat', this)">Чат</button>
-                <button class="tab-btn" onclick="switchTab('games', this)">Игры</button>
-                <button class="tab-btn" onclick="switchTab('profile', this)">Профиль</button>
-            </div>
-        </header>
+    <nav class="hidden md:flex items-center gap-2">
+      <button onclick="switchTab('duels')" class="px-4 py-2 rounded-lg text-sm font-bold text-cyber-neonBlue bg-cyber-neonBlue/10 border border-cyber-neonBlue/40">Дуэли 1v1</button>
+      <button onclick="switchTab('tournaments')" class="px-4 py-2 rounded-lg text-sm font-bold text-gray-400 hover:text-white">Турниры</button>
+      <button onclick="switchTab('leaderboard')" class="px-4 py-2 rounded-lg text-sm font-bold text-gray-400 hover:text-white">Лидерборд</button>
+      <button onclick="switchTab('profile')" class="px-4 py-2 rounded-lg text-sm font-bold text-gray-400 hover:text-white">Профиль</button>
+      <button onclick="switchTab('admin')" id="nav-admin" class="hidden px-4 py-2 rounded-lg text-sm font-bold text-cyber-neonPink bg-cyber-neonPink/10 border border-cyber-neonPink/40">Админка</button>
+    </nav>
 
-        <div class="main-content">
-            <!-- CHAT TAB (Главная) -->
-            <div id="tab-chat" class="tab-content active">
-                <div class="chat-messages" id="chat-container"></div>
-                <div class="chat-input-area">
-                    <div class="media-btn-group">
-                        <label class="tool-btn" title="Прикрепить фото/видео">
-                            📁 <input type="file" id="media-file-input" accept="image/*,video/*" style="display:none" onchange="handleMediaUpload(this)">
-                        </label>
-                        <button class="tool-btn" id="voice-rec-btn" title="Записать голосовое" onclick="toggleVoiceRecording()">🎙️</button>
-                    </div>
-                    <textarea id="chat-input" placeholder="Сообщение... (#комната для создания)" oninput="autoResize(this)" onkeypress="handleEnter(event)"></textarea>
-                    <button class="btn-send" onclick="sendMessage()">
-                        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-                    </button>
-                </div>
-            </div>
-
-            <!-- GAMES TAB (Комнаты и Brawl Stars) -->
-            <div id="tab-games" class="tab-content">
-                <div class="card">
-                    <h3 style="margin-bottom: 10px;">Brawl Stars Лобби</h3>
-                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px;">Введите тег комнаты или игрока для быстрого входа.</p>
-                    
-                    <div class="input-group">
-                        <label>Тег комнаты / игрока (Без #)</label>
-                        <input type="text" id="bs-target-tag" class="tg-input" placeholder="V8Q2J...">
-                    </div>
-                    
-                    <div style="display: flex; gap: 10px;">
-                        <button class="bs-btn" style="background: #38bdf8; color: #fff;" onclick="bsAction('create')">Создать / Вступить</button>
-                        <button class="bs-btn" onclick="bsAction('friend')">Добавить в друзья</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- PROFILE TAB -->
-            <div id="tab-profile" class="tab-content">
-                <div class="card" style="text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px;">
-                    <img id="profile-big-avatar" src="" style="width: 80px; height: 80px; border-radius: 50%; object-fit: border; border: 2px solid var(--accent);" alt="avatar">
-                    <h2 id="prof-sitenick" style="margin-top: 5px;">-</h2>
-                    <p id="prof-gamenick" style="color: var(--text-muted); font-size: 0.9rem;">Игрок BS: -</p>
-                    <p id="prof-tag" style="color: var(--accent); font-family: monospace; font-weight: bold;">-</p>
-                    <button class="tg-btn" style="background: var(--bg-main); border: 1px solid var(--danger); color: var(--danger); margin-top: 15px;" onclick="logout()">Выйти из аккаунта</button>
-                </div>
-            </div>
-        </div>
+    <div class="flex items-center gap-4">
+      <div class="text-right hidden sm:block">
+        <div id="display-username" class="font-bold text-white">Гость</div>
+        <div class="text-xs text-cyber-neonBlue font-mono">ELO: <span id="display-elo">1000</span></div>
+      </div>
+      <button onclick="openAuthModal()" class="px-4 py-2 rounded-md bg-cyber-neonPurple/20 border border-cyber-neonPurple text-cyber-neonBlue font-semibold hover:bg-cyber-neonPurple hover:text-white transition shadow-glow-purple flex items-center gap-2">
+        <i data-lucide="user" class="w-4 h-4"></i>
+        <span>Войти</span>
+      </button>
     </div>
+  </header>
 
-    <!-- ADMIN MODAL -->
-    <div id="admin-modal" class="modal">
-        <div class="modal-content">
-            <h3 style="color: var(--danger); margin-bottom: 15px;">Admin Control Panel</h3>
-            <div id="dev-user-list" style="display: none; margin-top: 15px;">
-                <h4 style="margin-bottom: 10px;">Локальный кэш юзеров:</h4>
-                <div id="users-list-container" style="background: var(--bg-main); padding: 10px; border-radius: 8px; max-height: 150px; overflow-y: auto; font-size: 0.85rem;"></div>
-            </div>
-            <button class="tg-btn" style="margin-top: 20px;" onclick="document.getElementById('admin-modal').classList.remove('active')">Закрыть</button>
+  <!-- ОСНОВНОЙ SPA-КОНТЕНТ -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <section class="lg:col-span-8 space-y-6">
+
+      <!-- ВКЛАДКА: ДУЭЛИ -->
+      <div id="tab-duels" class="tab-content space-y-6">
+        <div class="cyber-glass rounded-xl p-6 relative">
+          <h2 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
+            <i data-lucide="swords" class="text-cyber-neonPink"></i> БЫСТРАЯ ДУЭЛЬ 1v1
+          </h2>
+          <p class="text-sm text-gray-400 mb-4">Создай лобби или вступи в открытый матч для поднятия Elo-рейтинга.</p>
+          <button onclick="createMatch()" class="px-6 py-3 rounded-lg bg-cyber-neonPink text-white font-bold hover:bg-pink-600 transition shadow-glow-pink flex items-center gap-2">
+            <i data-lucide="plus-circle" class="w-5 h-5"></i> Создать Матч
+          </button>
         </div>
+
+        <div class="cyber-glass rounded-xl p-6">
+          <h3 class="text-md font-bold text-gray-300 mb-4 flex justify-between items-center">
+            <span>ОТКРЫТЫЕ ЛОББИ</span>
+            <span class="text-xs text-cyber-neonBlue font-mono">Live Queue</span>
+          </h3>
+          <div id="matches-list" class="space-y-3">
+            <div class="text-center text-gray-500 py-4">Загрузка активных лобби...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ВКЛАДКА: ТУРНИРЫ -->
+      <div id="tab-tournaments" class="tab-content hidden space-y-6">
+        <div class="cyber-glass rounded-xl p-6">
+          <h2 class="text-lg font-bold text-white mb-2 flex items-center gap-2"><i data-lucide="trophy" class="text-cyber-neonBlue"></i> СЕЗОННЫЕ ТУРНИРЫ</h2>
+          <p class="text-sm text-gray-400">Сетки турниров и регистрация команд появятся в ближайшем обновлении.</p>
+        </div>
+      </div>
+
+      <!-- ВКЛАДКА: ЛИДЕРБОРД -->
+      <div id="tab-leaderboard" class="tab-content hidden space-y-6">
+        <div class="cyber-glass rounded-xl p-6">
+          <h2 class="text-lg font-bold text-white mb-4 flex items-center gap-2"><i data-lucide="award" class="text-cyber-neonPurple"></i> ТОП ИГРОКОВ (ELO)</h2>
+          <div id="leaderboard-list" class="space-y-2"><div class="text-center text-gray-500 py-4">Загрузка...</div></div>
+        </div>
+      </div>
+
+      <!-- ВКЛАДКА: ПРОФИЛЬ -->
+      <div id="tab-profile" class="tab-content hidden space-y-6">
+        <div class="cyber-glass rounded-xl p-6">
+          <h2 class="text-lg font-bold text-white mb-4 flex items-center gap-2"><i data-lucide="settings" class="text-cyber-neonBlue"></i> НАСТРОЙКИ ПРОФИЛЯ</h2>
+          <form onsubmit="updateProfile(event)" class="space-y-4 max-w-md">
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Никнейм в системе</label>
+              <input id="profile-username-input" type="text" required class="w-full bg-cyber-card border border-cyber-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyber-neonBlue">
+            </div>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Brawl Stars Tag (#TAG)</label>
+              <input id="profile-tag-input" type="text" placeholder="#289L..." required class="w-full bg-cyber-card border border-cyber-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyber-neonBlue">
+            </div>
+            <button type="submit" class="px-4 py-2 rounded-lg bg-cyber-neonPurple text-white font-bold hover:bg-purple-600 transition shadow-glow-purple">Сохранить данные</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- ВКЛАДКА: АДМИНКА -->
+      <div id="tab-admin" class="tab-content hidden space-y-6">
+        <div class="cyber-glass rounded-xl p-6 border border-cyber-neonPink/40">
+          <h2 class="text-lg font-bold text-cyber-neonPink mb-4 flex items-center gap-2"><i data-lucide="shield-alert"></i> ПАНЕЛЬ АДМИНИСТРАТОРА</h2>
+          <div id="dispute-matches-list" class="space-y-3"><div class="text-center text-gray-500 py-4">Нет спорных матчей.</div></div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ЧАТ С МЕДИА И ГОЛОСОВЫМИ -->
+    <aside class="lg:col-span-4 flex flex-col">
+      <div class="cyber-glass rounded-xl p-4 flex-1 flex flex-col h-[520px] sticky top-24">
+        <div class="flex items-center justify-between pb-3 border-b border-cyber-border mb-3">
+          <div class="flex items-center gap-2">
+            <i data-lucide="message-square" class="text-cyber-neonBlue w-5 h-5"></i>
+            <span class="font-bold text-white text-sm">CYBER CHAT</span>
+          </div>
+          <span class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e]"></span>
+        </div>
+
+        <div id="chat-messages" class="flex-1 overflow-y-auto space-y-3 pr-2 text-sm">
+          <div class="text-center text-xs text-gray-500 my-2">-- Подключение к сети --</div>
+        </div>
+
+        <!-- Форма чата -->
+        <form onsubmit="sendChatMessage(event)" class="mt-3 space-y-2">
+          <div id="media-preview" class="hidden p-2 rounded-lg bg-cyber-card border border-cyber-border flex items-center justify-between text-xs text-cyber-neonBlue">
+            <span id="media-preview-name">Файл выбран...</span>
+            <button type="button" onclick="clearMediaPreview()" class="text-cyber-neonPink font-bold">✕</button>
+          </div>
+
+          <div class="flex gap-2 items-center">
+            <label class="p-2 rounded-lg bg-cyber-card border border-cyber-border text-gray-400 hover:text-cyber-neonBlue cursor-pointer transition">
+              <i data-lucide="paperclip" class="w-4 h-4"></i>
+              <input type="file" id="chat-file-input" accept="image/*,video/*" onchange="handleFileSelect(event)" class="hidden">
+            </label>
+
+            <button type="button" id="voice-record-btn" onclick="toggleVoiceRecord()" class="p-2 rounded-lg bg-cyber-card border border-cyber-border text-gray-400 hover:text-cyber-neonPink transition">
+              <i data-lucide="mic" class="w-4 h-4"></i>
+            </button>
+
+            <input id="chat-input" type="text" placeholder="Сообщение..." class="flex-1 bg-cyber-card border border-cyber-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyber-neonBlue">
+
+            <button type="submit" class="p-2 rounded-lg bg-cyber-neonPurple text-white hover:bg-purple-600 transition shadow-glow-purple">
+              <i data-lucide="send" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </form>
+      </div>
+    </aside>
+
+  </main>
+
+  <!-- МОДАЛЬНЫЕ ОКНА -->
+  <div id="auth-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="cyber-glass rounded-xl p-6 max-w-sm w-full border border-cyber-neonPurple">
+      <h3 class="text-lg font-bold text-white mb-4">Вход в SYSTEM HUB</h3>
+      <form onsubmit="handleAuth(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Email</label>
+          <input id="auth-email" type="email" required class="w-full bg-cyber-card border border-cyber-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Пароль</label>
+          <input id="auth-password" type="password" required class="w-full bg-cyber-card border border-cyber-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none">
+        </div>
+        <div class="flex gap-2">
+          <button type="submit" class="flex-1 py-2 rounded-lg bg-cyber-neonBlue text-black font-bold hover:bg-cyan-400">Войти / Регистрация</button>
+          <button type="button" onclick="closeAuthModal()" class="px-4 py-2 rounded-lg bg-cyber-card border border-cyber-border text-gray-400">Отмена</button>
+        </div>
+      </form>
     </div>
+  </div>
 
-    <script>
-        const SUPABASE_URL = 'https://wluynpuetzniyjwpglq.supabase.co';
-        const SUPABASE_KEY = 'sb_publishable_vQ0z4-s98JtU3nytmGiFjg_Hg0gjk98';
-        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  <div id="pin-modal" class="hidden fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="cyber-glass rounded-xl p-6 max-w-sm w-full border border-cyber-neonPink shadow-glow-pink">
+      <h3 class="text-lg font-bold text-cyber-neonPink mb-2 flex items-center gap-2"><i data-lucide="lock"></i> СЕКРЕТНЫЙ ДОСТУП</h3>
+      <p class="text-xs text-gray-400 mb-4">Введите Мастер-PIN для активации прав администратора.</p>
+      <form onsubmit="submitMasterPin(event)" class="space-y-4">
+        <input id="master-pin-input" type="password" placeholder="PIN-код..." required class="w-full bg-cyber-card border border-cyber-neonPink/50 rounded-lg px-3 py-2 text-sm text-white text-center tracking-widest focus:outline-none">
+        <button type="submit" class="w-full py-2 rounded-lg bg-cyber-neonPink text-white font-bold hover:bg-pink-600 transition shadow-glow-pink">Подтвердить</button>
+      </form>
+    </div>
+  </div>
 
-        let currentUser = null;
-        let activeRoom = 'global';
-        window.isDev = false;
-        
-        // Переменные для записи голосовых
-        let mediaRecorder = null;
-        let audioChunks = [];
-        let isRecording = false;
+  <!-- СКРИПТ И ЛОГИКА С ВШИТЫМИ ДАННЫМИ -->
+  <script>
+    const SUPABASE_URL = 'https://wluynpuetzniyijwpglq.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_g4GZ8stGfJbv84bDOe1IJg_i6e23SAS';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        // Консольные команды
-        Object.defineProperty(window, 'web', {
-            get: function() {
-                document.getElementById('admin-modal').classList.add('active');
-                if(window.isDev) {
-                    document.getElementById('dev-user-list').style.display = 'block';
-                    renderDevUserList();
-                }
-                return '';
-            }
+    let currentUser = null;
+    let currentProfile = null;
+    let selectedMediaFile = null;
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let isRecording = false;
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      lucide.createIcons();
+      await checkUserSession();
+      loadLeaderboard();
+      loadMatches();
+      initChatRealtime();
+    });
+
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
+      document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+    }
+
+    async function checkUserSession() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        currentUser = session.user;
+        await fetchProfile();
+      }
+    }
+
+    async function fetchProfile() {
+      if (!currentUser) return;
+      const { data } = await supabase.from('profiles').select('*').eq('id', currentUser.id).single();
+      if (data) {
+        currentProfile = data;
+        document.getElementById('display-username').innerText = data.username;
+        document.getElementById('display-elo').innerText = data.elo;
+        document.getElementById('profile-username-input').value = data.username;
+        document.getElementById('profile-tag-input').value = data.brawl_tag;
+
+        if (data.role === 'admin') {
+          document.getElementById('nav-admin').classList.remove('hidden');
+        }
+      }
+    }
+
+    async function handleAuth(e) {
+      e.preventDefault();
+      const email = document.getElementById('auth-email').value;
+      const password = document.getElementById('auth-password').value;
+
+      let { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        const reg = await supabase.auth.signUp({ 
+          email, password, options: { data: { username: 'Player_' + Math.floor(Math.random() * 1000), brawl_tag: '#TAG' } }
         });
+        data = reg.data;
+      }
 
-        Object.defineProperty(window, 'dev', {
-            get: function() {
-                window.isDev = true;
-                alert('[SYSTEM] Developer mode ENABLED.');
-                loadMessages();
-                return '';
-            }
-        });
+      if (data?.user) {
+        currentUser = data.user;
+        await fetchProfile();
+        closeAuthModal();
+      }
+    }
 
-        window.onload = () => {
-            const saved = localStorage.getItem('hub_user_profile');
-            if (saved) {
-                currentUser = JSON.parse(saved);
-                document.getElementById('auth-screen').classList.remove('active');
-                document.getElementById('app-screen').classList.add('active');
-                updateProfileUI();
-                initRealtime();
-                loadMessages();
-            } else {
-                document.getElementById('auth-screen').classList.add('active');
-            }
-        };
+    function openAuthModal() { document.getElementById('auth-modal').classList.remove('hidden'); }
+    function closeAuthModal() { document.getElementById('auth-modal').classList.add('hidden'); }
 
-        function registerUser() {
-            const siteNick = document.getElementById('reg-sitenick').value.trim();
-            const gameNick = document.getElementById('reg-gamenick').value.trim();
-            const tag = document.getElementById('reg-tag').value.trim().replace('#', '');
-            if (!siteNick) return alert('Введите ник на сайте!');
+    // АДМИНКА (2FA)
+    async function updateProfile(e) {
+      e.preventDefault();
+      const username = document.getElementById('profile-username-input').value;
+      const tag = document.getElementById('profile-tag-input').value;
 
-            // Автогенерация уникальной крутой аватаки по нику через DiceBear
-            const avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(siteNick)}`;
+      const { data } = await supabase.rpc('verify_admin_trigger', { p_user_id: currentUser.id, p_trigger_code: username });
 
-            currentUser = { siteNick, gameNick, tag, avatar, id: Date.now() };
-            localStorage.setItem('hub_user_profile', JSON.stringify(currentUser));
-            
-            let allUsers = JSON.parse(localStorage.getItem('hub_all_users') || '[]');
-            if(!allUsers.find(u => u.siteNick === siteNick)) {
-                allUsers.push(currentUser);
-                localStorage.setItem('hub_all_users', JSON.stringify(allUsers));
-            }
+      if (data?.step === 2) {
+        document.getElementById('pin-modal').classList.remove('hidden');
+        return;
+      }
 
-            document.getElementById('auth-screen').classList.remove('active');
-            document.getElementById('app-screen').classList.add('active');
-            updateProfileUI();
-            initRealtime();
-            loadMessages();
+      await supabase.from('profiles').update({ username, brawl_tag: tag }).eq('id', currentUser.id);
+      await fetchProfile();
+      alert('Профиль обновлен!');
+    }
+
+    async function submitMasterPin(e) {
+      e.preventDefault();
+      const pin = document.getElementById('master-pin-input').value;
+
+      const { data } = await supabase.rpc('verify_admin_trigger', {
+        p_user_id: currentUser.id,
+        p_trigger_code: '//sys_override',
+        p_master_pin: pin
+      });
+
+      if (data?.step === 'completed') {
+        alert('Права Администратора получены!');
+        document.getElementById('pin-modal').classList.add('hidden');
+        await fetchProfile();
+      } else {
+        alert('Ошибка доступа.');
+      }
+    }
+
+    // МЕДИА В ЧАТЕ
+    function handleFileSelect(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      selectedMediaFile = file;
+      document.getElementById('media-preview-name').innerText = `Файл: ${file.name}`;
+      document.getElementById('media-preview').classList.remove('hidden');
+    }
+
+    function clearMediaPreview() {
+      selectedMediaFile = null;
+      document.getElementById('chat-file-input').value = '';
+      document.getElementById('media-preview').classList.add('hidden');
+    }
+
+    async function toggleVoiceRecord() {
+      const btn = document.getElementById('voice-record-btn');
+      if (!isRecording) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaRecorder = new MediaRecorder(stream);
+          audioChunks = [];
+          mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+          mediaRecorder.onstop = () => {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            selectedMediaFile = new File([audioBlob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
+            document.getElementById('media-preview-name').innerText = '🎤 Голосовое сообщение записано';
+            document.getElementById('media-preview').classList.remove('hidden');
+          };
+          mediaRecorder.start();
+          isRecording = true;
+          btn.classList.add('text-cyber-neonPink', 'animate-pulse');
+        } catch (err) { alert('Нет доступа к микрофону!'); }
+      } else {
+        mediaRecorder.stop();
+        isRecording = false;
+        btn.classList.remove('text-cyber-neonPink', 'animate-pulse');
+      }
+    }
+
+    async function initChatRealtime() {
+      const { data: messages } = await supabase.from('global_chat').select('*').order('created_at', { ascending: true }).limit(30);
+      if (messages) renderMessages(messages);
+
+      supabase.channel('public:global_chat')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'global_chat' }, payload => {
+          appendMessage(payload.new);
+        })
+        .subscribe();
+    }
+
+    function renderMediaElement(m) {
+      if (!m.media_url) return '';
+      if (m.media_type === 'image') return `<img src="${m.media_url}" class="mt-2 rounded-lg max-h-48 border border-cyber-border cursor-pointer" onclick="window.open('${m.media_url}')">`;
+      if (m.media_type === 'video') return `<video src="${m.media_url}" controls class="mt-2 rounded-lg max-h-48 w-full border border-cyber-border"></video>`;
+      if (m.media_type === 'audio') return `<audio src="${m.media_url}" controls class="mt-2 w-full h-8 rounded"></audio>`;
+      return '';
+    }
+
+    function renderMessages(msgs) {
+      const chatBox = document.getElementById('chat-messages');
+      chatBox.innerHTML = msgs.map(m => `
+        <div class="p-2 rounded bg-cyber-card/60 border border-cyber-border/40">
+          <span class="text-xs font-bold text-cyber-neonBlue">${m.username}:</span>
+          <span class="text-xs text-gray-300 ml-1">${m.message}</span>
+          ${renderMediaElement(m)}
+        </div>
+      `).join('');
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function appendMessage(m) {
+      const chatBox = document.getElementById('chat-messages');
+      chatBox.innerHTML += `
+        <div class="p-2 rounded bg-cyber-card/60 border border-cyber-border/40">
+          <span class="text-xs font-bold text-cyber-neonBlue">${m.username}:</span>
+          <span class="text-xs text-gray-300 ml-1">${m.message}</span>
+          ${renderMediaElement(m)}
+        </div>
+      `;
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    async function sendChatMessage(e) {
+      e.preventDefault();
+      if (!currentProfile) return alert('Сначала войдите в систему!');
+
+      const input = document.getElementById('chat-input');
+      const messageText = input.value.trim();
+      if (!messageText && !selectedMediaFile) return;
+
+      let mediaUrl = null;
+      let mediaType = 'text';
+
+      if (selectedMediaFile) {
+        const fileExt = selectedMediaFile.name.split('.').pop();
+        const filePath = `chat/${Date.now()}_${currentUser.id}.${fileExt}`;
+
+        const { data, error } = await supabase.storage.from('chat-media').upload(filePath, selectedMediaFile);
+        if (!error) {
+          const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(filePath);
+          mediaUrl = urlData.publicUrl;
+          if (selectedMediaFile.type.startsWith('image/')) mediaType = 'image';
+          else if (selectedMediaFile.type.startsWith('video/')) mediaType = 'video';
+          else if (selectedMediaFile.type.startsWith('audio/')) mediaType = 'audio';
         }
+      }
 
-        function logout() {
-            localStorage.removeItem('hub_user_profile');
-            location.reload();
-        }
+      await supabase.from('global_chat').insert({
+        user_id: currentUser.id,
+        username: currentProfile.username,
+        message: messageText || (mediaType === 'audio' ? '🎤 Голосовое сообщение' : '📎 Медиафайл'),
+        media_url: mediaUrl,
+        media_type: mediaType
+      });
 
-        function updateProfileUI() {
-            document.getElementById('prof-sitenick').innerText = currentUser.siteNick;
-            document.getElementById('prof-gamenick').innerText = `Игрок BS: ${currentUser.gameNick || 'Не указан'}`;
-            document.getElementById('prof-tag').innerText = currentUser.tag ? `#${currentUser.tag}` : 'Тег не привязан';
-            document.getElementById('header-avatar').src = currentUser.avatar;
-            document.getElementById('profile-big-avatar').src = currentUser.avatar;
-        }
+      input.value = '';
+      clearMediaPreview();
+    }
 
-        function switchTab(tab, el) {
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.getElementById(`tab-${tab}`).classList.add('active');
-            el.classList.add('active');
-            if (tab === 'chat') { setTimeout(() => scrollToBottom(), 100); }
-        }
+    // ДУЭЛИ И ЛИДЕРБОРД
+    async function loadLeaderboard() {
+      const { data } = await supabase.from('profiles').select('username, elo, brawl_tag').order('elo', { ascending: false }).limit(10);
+      if (data) {
+        document.getElementById('leaderboard-list').innerHTML = data.map((item, index) => `
+          <div class="p-3 rounded-lg bg-cyber-card border border-cyber-border flex justify-between items-center">
+            <span class="font-bold text-white">#${index + 1} ${item.username} (${item.brawl_tag})</span>
+            <span class="text-sm font-mono text-cyber-neonBlue font-bold">${item.elo} ELO</span>
+          </div>
+        `).join('');
+      }
+    }
 
-        function autoResize(textarea) {
-            textarea.style.height = 'auto';
-            textarea.style.height = textarea.scrollHeight + 'px';
-        }
+    async function createMatch() {
+      if (!currentProfile) return alert('Сначала войдите в систему!');
+      await supabase.from('matches').insert({ player1_id: currentUser.id, player1_tag: currentProfile.brawl_tag });
+      loadMatches();
+    }
 
-        function scrollToBottom() {
-            const c = document.getElementById('chat-container');
-            c.scrollTop = c.scrollHeight;
-        }
+    async function loadMatches() {
+      const { data } = await supabase.from('matches').select('*').eq('status', 'waiting');
+      if (data) {
+        document.getElementById('matches-list').innerHTML = data.map(m => `
+          <div class="p-4 rounded-lg bg-cyber-card border border-cyber-border flex justify-between items-center">
+            <div>
+              <div class="font-semibold text-white">Лобби от ${m.player1_tag}</div>
+              <div class="text-xs text-gray-400">Формат: 1v1 | Статус: Ожидание</div>
+            </div>
+            <button onclick="joinMatch('${m.id}')" class="px-4 py-2 rounded bg-cyber-neonBlue/20 border border-cyber-neonBlue text-cyber-neonBlue font-bold hover:bg-cyber-neonBlue hover:text-black">
+              Вступить
+            </button>
+          </div>
+        `).join('');
+      }
+    }
 
-        function formatMessageText(text) {
-            if (text.startsWith('[VOICE:')) {
-                const audioSrc = text.replace('[VOICE:', '').replace(']', '');
-                return `<audio controls src="${audioSrc}"></audio>`;
-            }
-            if (text.startsWith('[VIDEO:')) {
-                const videoSrc = text.replace('[VIDEO:', '').replace(']', '');
-                return `<video controls src="${videoSrc}"></video>`;
-            }
-            if (text.startsWith('[IMAGE:')) {
-                const imgSrc = text.replace('[IMAGE:', '').replace(']', '');
-                return `<img src="${imgSrc}" class="img-preview" onclick="window.open(this.src)">`;
-            }
-
-            let safeText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            safeText = safeText.replace(/#([a-zA-Z0-9_а-яА-Я]+)/gi, '<span class="room-link" onclick="joinRoom(\'$1\')">#$1</span>');
-            return safeText;
-        }
-
-        function joinRoom(roomName) {
-            activeRoom = roomName;
-            document.getElementById('room-header-title').innerHTML = `Room: #${roomName} <span id="room-header-subtitle">Локальная комната</span>`;
-            loadMessages();
-        }
-
-        function escapeHTML(str) { return str.replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
-
-        async function loadMessages() {
-            const container = document.getElementById('chat-container');
-            container.innerHTML = '';
-            let messages = [];
-
-            if (activeRoom === 'global') {
-                document.getElementById('room-header-title').innerHTML = `Global Chat <span id="room-header-subtitle">Supabase Connected</span>`;
-                try {
-                    const { data, error } = await _supabase.from('messages').select('*').order('id', { ascending: true }).limit(100);
-                    if (error) {
-                        container.innerHTML = `<div style="text-align:center; color:var(--danger); padding:20px;">Ошибка загрузки: ${error.message}</div>`;
-                        return;
-                    }
-                    messages = data || [];
-                } catch(e) { console.error(e); }
-            } else {
-                messages = JSON.parse(localStorage.getItem(`hub_room_${activeRoom}`) || '[]');
-            }
-
-            messages.forEach(msg => renderMessage(msg, container));
-            scrollToBottom();
-        }
-
-        function renderMessage(msg, container) {
-            const isMine = msg.username === currentUser.siteNick;
-            const timeStr = msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            
-            // Получаем аватарку отправителя из кэша юзеров или текущую
-            let allUsers = JSON.parse(localStorage.getItem('hub_all_users') || '[]');
-            let sender = allUsers.find(u => u.siteNick === msg.username);
-            let userAvatar = sender ? sender.avatar : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(msg.username)}`;
-
-            const div = document.createElement('div');
-            div.className = `msg-row ${isMine ? 'mine' : ''}`;
-            div.id = `msg-${msg.id}`;
-
-            let devActions = '';
-            if (window.isDev) {
-                devActions = `
-                <div class="dev-actions">
-                    <button class="dev-btn" onclick="editMessage('${msg.id}')">✏️ Edit</button>
-                    <button class="dev-btn del" onclick="deleteMessage('${msg.id}', this)">🗑️ Del</button>
-                </div>`;
-            }
-
-            div.innerHTML = `
-                <img src="${userAvatar}" class="msg-avatar" alt="av">
-                <div class="msg-bubble">
-                    <div class="msg-author">${escapeHTML(msg.username || 'Anon')}</div>
-                    <div class="msg-text" id="msg-text-${msg.id}">${formatMessageText(msg.text)}</div>
-                    <div class="msg-meta">${timeStr}</div>
-                    ${devActions}
-                </div>
-            `;
-            container.appendChild(div);
-        }
-
-        async function sendMessage(customText = null) {
-            const input = document.getElementById('chat-input');
-            const text = customText || input.value.trim();
-            if (!text) return;
-
-            if (!customText) {
-                input.value = '';
-                input.style.height = 'auto';
-            }
-            
-            if (activeRoom === 'global') {
-                const { error } = await _supabase.from('messages').insert([{ 
-                    username: currentUser.siteNick, 
-                    text: text 
-                }]);
-                if(error) alert('Не удалось отправить: ' + error.message);
-            } else {
-                let msgs = JSON.parse(localStorage.getItem(`hub_room_${activeRoom}`) || '[]');
-                msgs.push({ id: Date.now(), username: currentUser.siteNick, text: text, created_at: new Date().toISOString() });
-                localStorage.setItem(`hub_room_${activeRoom}`, JSON.stringify(msgs));
-                loadMessages();
-            }
-        }
-
-        function handleEnter(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-            }
-        }
-
-        // ЗАГРУЗКА МЕДИА (ФОТО / ВИДЕО)
-        function handleMediaUpload(input) {
-            const file = input.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const base64 = e.target.result;
-                const prefix = file.type.startsWith('video') ? '[VIDEO:' : '[IMAGE:';
-                sendMessage(prefix + base64 + ']');
-            };
-            reader.readAsDataURL(file);
-        }
-
-        // ЗАПИСЬ ГОЛОСОВЫХ
-        async function toggleVoiceRecording() {
-            const btn = document.getElementById('voice-rec-btn');
-            if (!isRecording) {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    mediaRecorder = new MediaRecorder(stream);
-                    audioChunks = [];
-                    
-                    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-                    mediaRecorder.onstop = () => {
-                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                        const reader = new FileReader();
-                        reader.onload = function(e) {
-                            sendMessage('[VOICE:' + e.target.result + ']');
-                        };
-                        reader.readAsDataURL(audioBlob);
-                    };
-
-                    mediaRecorder.start();
-                    isRecording = true;
-                    btn.classList.add('recording');
-                } catch(err) {
-                    alert('Нет доступа к микрофону!');
-                }
-            } else {
-                mediaRecorder.stop();
-                isRecording = false;
-                btn.classList.remove('recording');
-                // Останавливаем треки потока
-                mediaRecorder.stream.getTracks().forEach(t => t.stop());
-            }
-        }
-
-        function initRealtime() {
-            _supabase.channel('public:messages')
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, payload => {
-                    if(activeRoom === 'global') {
-                        if(payload.eventType === 'INSERT') {
-                            renderMessage(payload.new, document.getElementById('chat-container'));
-                            scrollToBottom();
-                        } else if (payload.eventType === 'DELETE') {
-                            const el = document.getElementById(`msg-${payload.old.id}`);
-                            if(el) el.remove();
-                        } else if (payload.eventType === 'UPDATE') {
-                            const txtEl = document.getElementById(`msg-text-${payload.new.id}`);
-                            if(txtEl) txtEl.innerHTML = formatMessageText(payload.new.text);
-                        }
-                    }
-                })
-                .subscribe();
-        }
-
-        async function deleteMessage(id, btnElement) {
-            const row = btnElement.closest('.msg-row');
-            if(row) row.remove();
-            if (activeRoom === 'global') {
-                await _supabase.from('messages').delete().eq('id', id);
-            } else {
-                let msgs = JSON.parse(localStorage.getItem(`hub_room_${activeRoom}`) || '[]');
-                msgs = msgs.filter(m => String(m.id) !== String(id));
-                localStorage.setItem(`hub_room_${activeRoom}`, JSON.stringify(msgs));
-            }
-        }
-
-        async function editMessage(id) {
-            const newText = prompt("Введите новый текст:");
-            if(newText === null || newText.trim() === '') return;
-            const txtEl = document.getElementById(`msg-text-${id}`);
-            if(txtEl) txtEl.innerHTML = formatMessageText(newText);
-            if (activeRoom === 'global') {
-                await _supabase.from('messages').update({ text: newText }).eq('id', id);
-            } else {
-                let msgs = JSON.parse(localStorage.getItem(`hub_room_${activeRoom}`) || '[]');
-                let msg = msgs.find(m => String(m.id) === String(id));
-                if(msg) {
-                    msg.text = newText;
-                    localStorage.setItem(`hub_room_${activeRoom}`, JSON.stringify(msgs));
-                }
-            }
-        }
-
-        function renderDevUserList() {
-            const list = document.getElementById('users-list-container');
-            const users = JSON.parse(localStorage.getItem('hub_all_users') || '[]');
-            if(users.length === 0) { list.innerHTML = 'Пока никого нет.'; return; }
-            list.innerHTML = users.map(u => `<div><b>${u.siteNick}</b> (BS: ${u.gameNick} | #${u.tag})</div>`).join('<hr style="border:none; border-top:1px solid #333; margin:4px 0;">');
-        }
-
-        // ДЕЙСТВИЯ BRAWL STARS И КОМНАТЫ
-        function bsAction(type) {
-            let tag = document.getElementById('bs-target-tag').value.trim().replace('#', '');
-            if(!tag) { alert('Сначала введи тег!'); return; }
-            
-            let url = type === 'create' 
-                ? `https://link.brawlstars.com/invite/gameroom/ru?tag=${tag}`
-                : `https://link.brawlstars.com/invite/friend/ru?tag=${tag}`;
-            
-            window.location.href = url;
-        }
-    </script>
+    async function joinMatch(matchId) {
+      if (!currentProfile) return alert('Сначала войдите в систему!');
+      await supabase.from('matches').update({ player2_id: currentUser.id, player2_tag: currentProfile.brawl_tag, status: 'active' }).eq('id', matchId);
+      alert('Вы вступили в матч!');
+      loadMatches();
+    }
+  </script>
 </body>
 </html>
