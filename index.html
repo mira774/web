@@ -80,7 +80,6 @@
   </div>
 </div>
 
-<!-- Обновленные универсальные CDN скрипты -->
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
@@ -739,23 +738,26 @@ function render() {
 }
 
 const models = {};
+
 async function detectLoop() {
   const seq = ['pose', 'hands', 'pose', 'hands', 'face'];
-  const lastT = { pose: -1, hands: -1, face: -1 };
-  let i = 0, tries = 0;
+  let i = 0;
   while (running) {
-    if (document.hidden || video.readyState < 2) { await sleep(120); continue; }
+    if (document.hidden || video.readyState < 2) { await sleep(100); continue; }
     const m = seq[i++ % seq.length];
-    if (lastT[m] === video.currentTime) { if (++tries >= seq.length) { tries = 0; await nextFrame(); } continue; }
-    tries = 0; lastT[m] = video.currentTime;
-    try { await models[m].send({ image: video }); }
-    catch (e) { console.warn('MediaPipe:', e); await sleep(200); }
+    try {
+      if (models[m]) await models[m].send({ image: video });
+    } catch (e) {
+      console.warn('Ошибка кадра MediaPipe (' + m + '):', e);
+      await sleep(150);
+    }
+    await nextFrame();
   }
 }
 
 function buildModels() {
   const pose = new Pose({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}` });
-  pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, enableSegmentation: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+  pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
   pose.onResults(r => {
     if (!r.poseLandmarks) return;
     P.t = performance.now(); P.tgt = r.poseLandmarks;
@@ -783,61 +785,43 @@ function buildModels() {
     const l = r.multiFaceLandmarks[0];
     FT.t = performance.now(); FT.tgt = [l[10], l[152], l[234], l[454]].map(p => ({ x: p.x, y: p.y }));
   });
-  models.pose = pose; models.hands = hnd; models.face = face;
+
+  models.pose = pose; 
+  models.hands = hnd; 
+  models.face = face;
 }
 
 const btn = $('btn'), msg =$('msg');
 function setMsg(t, err) { msg.textContent = t; msg.classList.toggle('err', !!err); }
 
 btn.addEventListener('click', async () => {
-  btn.disabled = true; initAudio();
-  if (typeof Pose === 'undefined' || typeof Hands === 'undefined' || typeof FaceMesh === 'undefined') {
-    setMsg('Не удалось загрузить MediaPipe с CDN. Проверьте интернет.', true); btn.disabled = false; return;
-  }
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    setMsg('Камера доступна только по HTTPS или на localhost.', true); btn.disabled = false; return;
-  }
+  btn.disabled = true; 
+  initAudio();
   setMsg('Запрашиваю доступ к камере…');
+
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30, max: 60 } }, audio: false
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30, max: 60 } }, 
+      audio: false
     });
     video.srcObject = stream;
     await video.play();
   } catch (e) {
-    setMsg('Нет доступа к камере: ' + (e.message || e.name), true); btn.disabled = false; return;
-  }
-  resize();
-
-  setMsg('Загружаю нейросети…');
-  try {
-    buildModels();
-    
-    // Безопасная инициализация моделей с таймаутом
-    const loadWithTimeout = (promise, name, ms = 6000) => 
-      Promise.race([
-        promise,
-        new Promise((_, reject) => setTimeout(() => reject(new Error(`Таймаут ${name}`)), ms))
-      ]);
-
-    await loadWithTimeout(models.pose.initialize(), 'Pose');
-    setMsg('Pose ✓ | Загрузка Hands…');
-    
-    await loadWithTimeout(models.hands.initialize(), 'Hands');
-    setMsg('Pose ✓ | Hands ✓ | Загрузка Face Mesh…');
-    
-    try {
-      await loadWithTimeout(models.face.initialize(), 'Face Mesh', 4000);
-    } catch (faceErr) {
-      console.warn('Face Mesh не ответил вовремя, включен запасной трекинг лица через Pose:', faceErr);
-    }
-
-  } catch (e) {
-    setMsg('Ошибка загрузки моделей: ' + (e.message || e), true); 
+    setMsg('Ошибка камеры: ' + (e.message || 'нет доступа'), true); 
     btn.disabled = false; 
     return;
   }
 
+  resize();
+  setMsg('Инициализация нейросетей…');
+
+  try {
+    buildModels();
+  } catch (e) {
+    console.warn('Сбой создания нейросетей:', e);
+  }
+
+  // Сразу открываем экран, не дожидаясь долгих загрузок
   $('start').classList.add('hidden');$('hud').classList.remove('hidden');
   running = true;
   detectLoop();
