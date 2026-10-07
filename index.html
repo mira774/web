@@ -2,44 +2,32 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-<title>3D PARTICLE SUIT — Нано-Костюм</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
+<title>3D PARTICLE SUIT — Auto AR</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: system-ui, -apple-system, sans-serif; }
   
+  /* Зеркальное видео с веб-камеры на весь экран */
   #video {
     position: fixed; inset: 0; width: 100%; height: 100%;
-    object-fit: cover; transform: scaleX(-1); background: #000;
+    object-fit: cover; transform: scaleX(-1); background: #000; z-index: 1;
   }
+  
+  /* Overlay 3D Canvas */
   #c3d {
     position: fixed; inset: 0; width: 100%; height: 100%;
     pointer-events: none; z-index: 2;
   }
   
-  #start {
-    position: fixed; inset: 0; z-index: 999; display: flex;
-    align-items: center; justify-content: center; background: rgba(5,10,15,0.95);
-    color: #00e5ff; text-align: center; padding: 20px;
-  }
-  .btn {
-    font-size: 18px; font-weight: bold; padding: 18px 40px; border-radius: 50px;
-    background: #00e5ff; color: #000; border: none; cursor: pointer;
-    box-shadow: 0 0 25px #00e5ff; margin-top: 20px;
-    user-select: none; -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
-  }
-  .btn:active { transform: scale(0.94); background: #70f0ff; }
-  
-  #status-msg {
-    margin-top: 15px; font-size: 14px; color: #ff8a7a; min-height: 20px; max-width: 320px;
-  }
-
-  .hint {
-    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-    z-index: 5; background: rgba(0,0,0,0.8); color: #00e5ff; padding: 10px 20px;
-    border-radius: 20px; border: 1px solid #00e5ff; font-size: 13px; text-align: center;
-    pointer-events: none;
+  /* Плашка статуса вверху экрана */
+  #status-bar {
+    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+    z-index: 10; padding: 10px 22px; border-radius: 30px;
+    background: rgba(0, 15, 25, 0.85); border: 1px solid rgba(0, 229, 255, 0.5);
+    color: #00e5ff; font-size: 13px; font-weight: 600; text-align: center;
+    backdrop-filter: blur(8px); box-shadow: 0 0 15px rgba(0, 229, 255, 0.3);
+    pointer-events: none; transition: opacity 0.4s ease;
   }
 </style>
 
@@ -51,31 +39,25 @@
 
 <video id="video" playsinline muted autoplay></video>
 <canvas id="c3d"></canvas>
-
-<div id="start">
-  <div>
-    <h1>NANO PARTICLE SUIT 3D</h1>
-    <p style="color:#aaa; margin-top:8px;">Объёмный костюм из 2500+ силовых частиц</p>
-    <button class="btn" id="startBtn" type="button">ВКЛЮЧИТЬ КОСТЮМ</button>
-    <div id="status-msg"></div>
-  </div>
-</div>
-
-<div class="hint" id="hud-hint">
-  ✨ Нано-частицы автоматически покрывают тело в 3D пространстве
-</div>
+<div id="status-bar">🎥 Запуск веб-камеры...</div>
 
 <script>
+(() => {
+'use strict';
+
 const video = document.getElementById('video');
 const canvas3D = document.getElementById('c3d');
-const startBtn = document.getElementById('startBtn');
-const startScreen = document.getElementById('start');
-const statusMsg = document.getElementById('status-msg');
-const hudHint = document.getElementById('hud-hint');
+const statusBar = document.getElementById('status-bar');
+
+function setStatus(text, isError = false) {
+  statusBar.textContent = text;
+  statusBar.style.borderColor = isError ? 'rgba(255, 90, 80, 0.8)' : 'rgba(0, 229, 255, 0.5)';
+  statusBar.style.color = isError ? '#ff8a7a' : '#00e5ff';
+}
 
 let W = window.innerWidth, H = window.innerHeight;
 
-// --- 1. THREE.JS СЦЕНА ---
+// --- 1. THREE.JS 3D СЦЕНА ---
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 1000);
 camera.position.set(0, 0, 5);
@@ -84,42 +66,51 @@ const renderer = new THREE.WebGLRenderer({ canvas: canvas3D, alpha: true, antial
 renderer.setSize(W, H);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 
-window.addEventListener('resize', () => {
+// Расчет видимых размеров в 3D на расстоянии z=0
+let visibleHeight = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * 5;
+let visibleWidth = visibleHeight * camera.aspect;
+
+function onResize() {
   W = window.innerWidth; H = window.innerHeight;
   camera.aspect = W / H;
   camera.updateProjectionMatrix();
   renderer.setSize(W, H);
-});
+  visibleHeight = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * 5;
+  visibleWidth = visibleHeight * camera.aspect;
+}
+window.addEventListener('resize', onResize);
 
-// --- 2. СИСТЕМА 3D ЧАСТИЦ ---
-const PARTICLE_COUNT = 2500;
+// --- 2. СИСТЕМА 3D ЧАСТИЦ (2400 штук) ---
+const PARTICLE_COUNT = 2400;
 const geometry = new THREE.BufferGeometry();
 const positions = new Float32Array(PARTICLE_COUNT * 3);
 const colors = new Float32Array(PARTICLE_COUNT * 3);
 
+// Заполнение начальных координат
 for (let i = 0; i < PARTICLE_COUNT * 3; i += 3) {
   positions[i] = 0; positions[i + 1] = 0; positions[i + 2] = 0;
-  colors[i] = 0.0;
-  colors[i + 1] = 0.8 + Math.random() * 0.2;
-  colors[i + 2] = 1.0;
+  colors[i] = 0.0;                       // R
+  colors[i + 1] = 0.85 + Math.random() * 0.15; // G (Неоново-голубой)
+  colors[i + 2] = 1.0;                       // B
 }
 
 geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-const particleCanvas = document.createElement('canvas');
-particleCanvas.width = 16; particleCanvas.height = 16;
-const pCtx = particleCanvas.getContext('2d');
+// Создание светящейся текстуры точки
+const pCanvas = document.createElement('canvas');
+pCanvas.width = 16; pCanvas.height = 16;
+const pCtx = pCanvas.getContext('2d');
 const grad = pCtx.createRadialGradient(8, 8, 0, 8, 8, 8);
 grad.addColorStop(0, 'rgba(255,255,255,1)');
-grad.addColorStop(0.5, 'rgba(0,229,255,0.8)');
+grad.addColorStop(0.4, 'rgba(0,229,255,0.8)');
 grad.addColorStop(1, 'rgba(0,0,0,0)');
 pCtx.fillStyle = grad; pCtx.fillRect(0, 0, 16, 16);
 
-const pTexture = new THREE.CanvasTexture(particleCanvas);
+const pTexture = new THREE.CanvasTexture(pCanvas);
 
 const material = new THREE.PointsMaterial({
-  size: 0.07,
+  size: 0.08,
   map: pTexture,
   transparent: true,
   blending: THREE.AdditiveBlending,
@@ -130,36 +121,44 @@ const material = new THREE.PointsMaterial({
 const particleSystem = new THREE.Points(geometry, material);
 scene.add(particleSystem);
 
-// --- 3. ОБЪЕМ ВОКРУГ ТЕЛА ---
+// --- 3. СВЯЗИ КОСТЕЙ И ПОСТРОЕНИЕ ОБЪЕМА ---
 const BONES = [
-  [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
-  [11, 23], [12, 24], [23, 24],
-  [23, 25], [24, 26], [25, 27], [26, 28]
+  [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], // Плечи и руки
+  [11, 23], [12, 24], [23, 24],                    // Торс
+  [23, 25], [24, 26], [25, 27], [26, 28]             // Ноги
 ];
 
-function updateBodyParticles(landmarks) {
+function updateParticlesFromPose(landmarks) {
   const posAttr = geometry.attributes.position;
   let pIdx = 0;
 
-  const to3D = (lm) => new THREE.Vector3(
-    -(lm.x - 0.5) * 4.5,
-    -(lm.y - 0.5) * 3.2,
-    -lm.z * 2
-  );
+  // Конвертация 2D/3D координат MediaPipe с учетом зеркалирования (1 - x)
+  const toWorld3D = (lm) => {
+    const screenX = (1 - lm.x); // Зеркалирование по X
+    const screenY = lm.y;
+    return new THREE.Vector3(
+      (screenX - 0.5) * visibleWidth,
+      (0.5 - screenY) * visibleHeight,
+      -lm.z * 1.5
+    );
+  };
 
+  const now = performance.now() * 0.003;
+
+  // Формируем спиральные цилиндры из частиц вокруг каждой кости
   BONES.forEach(([i, j]) => {
     if (!landmarks[i] || !landmarks[j]) return;
-    const pA = to3D(landmarks[i]);
-    const pB = to3D(landmarks[j]);
+    const pA = toWorld3D(landmarks[i]);
+    const pB = toWorld3D(landmarks[j]);
 
-    const particlesPerBone = 180;
-    const radius = 0.18;
+    const particlesPerBone = 160;
+    const radius = 0.16;
 
     for (let k = 0; k < particlesPerBone; k++) {
       if (pIdx >= PARTICLE_COUNT) break;
 
       const t = k / particlesPerBone;
-      const angle = (k * 137.5) * (Math.PI / 180) + performance.now() * 0.002;
+      const angle = (k * 137.5) * (Math.PI / 180) + now;
 
       const cx = pA.x + (pB.x - pA.x) * t;
       const cy = pA.y + (pB.y - pA.y) * t;
@@ -173,12 +172,13 @@ function updateBodyParticles(landmarks) {
     }
   });
 
+  // Энергетическое облако вокруг головы
   if (landmarks[0]) {
-    const head = to3D(landmarks[0]);
+    const head = toWorld3D(landmarks[0]);
     while (pIdx < PARTICLE_COUNT) {
       const a1 = Math.random() * Math.PI * 2;
       const a2 = Math.random() * Math.PI * 2;
-      const r = 0.25;
+      const r = 0.22;
       posAttr.setXYZ(
         pIdx,
         head.x + Math.sin(a1) * Math.cos(a2) * r,
@@ -192,53 +192,46 @@ function updateBodyParticles(landmarks) {
   posAttr.needsUpdate = true;
 }
 
-// --- 4. MEDIAPIPE POSE ---
-let pose = null;
+// --- 4. МЕДИАПАЙП И ОТРОВЕННЫЙ ЦИКЛ ---
+let poseModel = null;
+
 function initPose() {
-  if (pose) return;
   try {
-    pose = new Pose({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+    poseModel = new Pose({
+      locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`
     });
 
-    pose.setOptions({
+    poseModel.setOptions({
       modelComplexity: 0,
       smoothLandmarks: true,
       minDetectionConfidence: 0.5,
       minTrackingConfidence: 0.5
     });
 
-    pose.onResults((results) => {
+    poseModel.onResults((results) => {
       if (results.poseLandmarks) {
-        updateBodyParticles(results.poseLandmarks);
-        hudHint.textContent = '✨ Костюм активен!';
+        updateParticlesFromPose(results.poseLandmarks);
+        setStatus("✨ 3D Нано-костюм активен");
       }
     });
   } catch (e) {
-    console.error("Ошибка инициализации Pose:", e);
+    console.warn("Ошибка загрузки Pose:", e);
   }
 }
 
 function animate() {
   requestAnimationFrame(animate);
-  particleSystem.rotation.y = Math.sin(performance.now() * 0.001) * 0.05;
+  particleSystem.rotation.y = Math.sin(performance.now() * 0.001) * 0.03;
   renderer.render(scene, camera);
 }
 animate();
 
-// --- 5. ОБРАБОТЧИК КНОПКИ ---
-let isStarted = false;
+// --- 5. АВТОМАТИЧЕСКИЙ ЗАПУСК КАМЕРЫ ---
+let cameraStarted = false;
 
-async function handleStart(e) {
-  if (e) e.preventDefault();
-  if (isStarted) return;
-  isStarted = true;
-
-  startBtn.textContent = "ЗАПУСК...";
-  statusMsg.style.color = '#00e5ff';
-  statusMsg.textContent = 'Подключение к камере...';
-
-  initPose();
+async function startCamera() {
+  if (cameraStarted) return;
+  cameraStarted = true;
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -249,35 +242,38 @@ async function handleStart(e) {
     video.srcObject = stream;
     await video.play();
 
-    startScreen.style.display = 'none';
-    hudHint.textContent = '⏳ Подойдите к камере...';
+    setStatus("⚡ Подключение 3D-нейросети...");
+    initPose();
 
     let isProcessing = false;
-    async function processVideo() {
-      if (video.readyState >= 2 && pose && !isProcessing) {
+    async function processLoop() {
+      if (video.readyState >= 2 && poseModel && !isProcessing) {
         isProcessing = true;
         try {
-          await pose.send({ image: video });
+          await poseModel.send({ image: video });
         } catch (err) {
-          console.warn("Ошибка обработки кадра:", err);
+          console.warn("Сбой кадра:", err);
         }
         isProcessing = false;
       }
-      requestAnimationFrame(processVideo);
+      requestAnimationFrame(processLoop);
     }
-    processVideo();
+    processLoop();
 
   } catch (err) {
     console.error(err);
-    isStarted = false;
-    startBtn.textContent = "ПОВТОРИТЬ";
-    statusMsg.style.color = '#ff8a7a';
-    statusMsg.textContent = 'Ошибка доступа к камере: ' + (err.message || err.name);
+    cameraStarted = false;
+    setStatus("⚠️ Нажмите на экран, чтобы включить камеру", true);
   }
 }
 
-startBtn.addEventListener('click', handleStart);
-startBtn.addEventListener('touchstart', handleStart, { passive: false });
+// Попытка автозапуска при загрузке страницы
+window.addEventListener('DOMContentLoaded', startCamera);
+// Фоллбек: запуск при первом касании/клике по экрану (если браузер заблокировал автоплей)
+window.addEventListener('click', startCamera, { once: true });
+window.addEventListener('touchstart', startCamera, { once: true });
+
+})();
 </script>
 </body>
 </html>
