@@ -2,179 +2,249 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Магия Рук — Интерактивный Сайт</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Магия и Порталы</title>
   <style>
-    body {
+    * {
+      box-sizing: border-box;
       margin: 0;
-      background: #090d16;
-      color: #fff;
-      font-family: 'Segoe UI', sans-serif;
-      overflow: hidden;
+      padding: 0;
     }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    .container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
+    /* Камера на весь экран */
     #webcam {
       position: absolute;
-      top: 10px;
-      right: 10px;
-      width: 200px;
-      height: 150px;
-      border-radius: 12px;
-      transform: scaleX(-1); /* Зеркалим видео */
-      border: 2px solid #38bdf8;
-      z-index: 10;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1); /* Зеркалим как в селфи */
     }
+    /* Оверлей для магии и графики */
     #canvas {
       position: absolute;
       top: 0;
       left: 0;
-      width: 100vw;
-      height: 100vh;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
     }
-    .info {
+    .ui-hint {
       position: absolute;
-      top: 20px;
-      left: 20px;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
       z-index: 10;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(8px);
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 20px;
+      font-size: 13px;
+      text-align: center;
+      border: 1px solid rgba(255, 255, 255, 0.2);
       pointer-events: none;
+      width: 90%;
+      max-width: 400px;
     }
-    h1 { margin: 0 0 5px 0; font-size: 24px; color: #38bdf8; text-shadow: 0 0 10px #38bdf8; }
-    p { margin: 3px 0; color: #94a3b8; font-size: 14px; }
   </style>
 
-  <!-- Подключаем библиотеки MediaPipe Hands -->
+  <!-- Подключение MediaPipe Hands & Face Mesh -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
 </head>
 <body>
 
-  <div class="info">
-    <h1>🪄 Колдовство Руками</h1>
-    <p>1. Подвигай указательным пальцем — за ним летит неоновая магия.</p>
-    <p>2. Соедини большой и указательный палец (щепоть) — создастся 🟦 **Квадрат**.</p>
-    <p>3. Выпрями ✌️ 2 пальца (указательный + средний) — создастся 🔺 **Треугольник**.</p>
+  <div class="container">
+    <video id="webcam" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+    
+    <div class="ui-hint">
+      ✨ <b>Управление жестами:</b><br>
+      👌 Соедини пальцы в круг — <b>Портал</b><br>
+      ✋ Раскрой ладонь («Дай 5») — <b>Огонь на пальцах</b><br>
+      👤 Поднеси руку к лицу — <b>Сетка маски на голове</b>
+    </div>
   </div>
-
-  <video id="webcam" autoplay playsinline></video>
-  <canvas id="canvas"></canvas>
 
   <script>
     const videoElement = document.getElementById('webcam');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
 
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    let windowWidth = window.innerWidth;
+    let windowHeight = window.innerHeight;
 
-    const shapes = []; // Хранилище созданных фигур
-    const particles = []; // Искры за пальцем
+    function resizeCanvas() {
+      windowWidth = window.innerWidth;
+      windowHeight = window.innerHeight;
+      canvas.width = windowWidth;
+      canvas.height = windowHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
 
-    // Обработка кадров нейросетью MediaPipe
-    function onResults(results) {
+    const fireParticles = [];
+    let portalAngle = 0;
+    let faceLandmarksData = null;
+
+    // Отрезки соединения суставов пальцев
+    const HAND_CONNECTIONS = [
+      [0,1],[1,2],[2,3],[3,4],
+      [0,5],[5,6],[6,7],[7,8],
+      [5,9],[9,10],[10,11],[11,12],
+      [9,13],[13,14],[14,15],[15,16],
+      [13,17],[17,18],[18,19],[19,20],[0,17]
+    ];
+
+    // Отрисовка результатов трекинга
+    function onHandsResults(results) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Отрисовка сохраненных фигур
-      shapes.forEach(shape => shape.draw());
+      // 1. Отрисовка маски на лице при обнаружении
+      if (faceLandmarksData) {
+        ctx.fillStyle = 'rgba(0, 240, 255, 0.8)';
+        for (let i = 0; i < faceLandmarksData.length; i += 3) {
+          const pt = faceLandmarksData[i];
+          const x = (1 - pt.x) * canvas.width;
+          const y = pt.y * canvas.height;
+          ctx.beginPath();
+          ctx.arc(x, y, 1.8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
 
-      // Отрисовка магии/частиц
-      particles.forEach((p, index) => {
+      // 2. Отрисовка огненных частиц
+      for (let i = fireParticles.length - 1; i >= 0; i--) {
+        const p = fireParticles[i];
         p.update();
         p.draw();
-        if (p.life <= 0) particles.splice(index, 1);
-      });
+        if (p.life <= 0) fireParticles.splice(i, 1);
+      }
 
+      // 3. Анализ рук
       if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-        const landmarks = results.multiHandLandmarks[0];
+        for (const landmarks of results.multiHandLandmarks) {
+          
+          // Конвертируем координаты MediaPipe (от 0 до 1) под экран
+          const pts = landmarks.map(pt => ({
+            x: (1 - pt.x) * canvas.width,
+            y: pt.y * canvas.height
+          }));
 
-        // Координаты указательного пальца (точка №8) и большого (№4)
-        // Зеркалим по X, чтобы движение совпадало с экраном
-        const indexTip = {
-          x: (1 - landmarks[8].x) * canvas.width,
-          y: landmarks[8].y * canvas.height
-        };
-        const thumbTip = {
-          x: (1 - landmarks[4].x) * canvas.width,
-          y: landmarks[4].y * canvas.height
-        };
-        const middleTip = {
-          x: (1 - landmarks[12].x) * canvas.width,
-          y: landmarks[12].y * canvas.height
-        };
+          // РИСУЕМ ТОЧКИ И СВЯЗИ РУКИ
+          ctx.strokeStyle = 'rgba(0, 255, 200, 0.6)';
+          ctx.lineWidth = 2;
+          for (const [i, j] of HAND_CONNECTIONS) {
+            ctx.beginPath();
+            ctx.moveTo(pts[i].x, pts[i].y);
+            ctx.lineTo(pts[j].x, pts[j].y);
+            ctx.stroke();
+          }
 
-        // Создаем неоновые искры за указательным пальцем
-        for (let i = 0; i < 3; i++) {
-          particles.push(new Particle(indexTip.x, indexTip.y));
+          for (let i = 0; i < pts.length; i++) {
+            ctx.fillStyle = i % 4 === 0 ? '#ff007f' : '#00ffff';
+            ctx.beginPath();
+            ctx.arc(pts[i].x, pts[i].y, 4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // ЖЕСТ 1: Круг / Кольцо (Большой pt[4] + Указательный pt[8])
+          const pinchDist = Math.hypot(pts[4].x - pts[8].x, pts[4].y - pts[8].y);
+          if (pinchDist < 45) {
+            const centerX = (pts[4].x + pts[8].x) / 2;
+            const centerY = (pts[4].y + pts[8].y) / 2;
+            drawPortal(centerX, centerY, 60);
+          }
+
+          // ЖЕСТ 2: Открытая ладонь ("Дай 5") -> Пальцы горят
+          const isOpenHand = 
+            pts[8].y < pts[6].y && 
+            pts[12].y < pts[10].y && 
+            pts[16].y < pts[14].y && 
+            pts[20].y < pts[18].y;
+
+          if (isOpenHand) {
+            const fingerTips = [4, 8, 12, 16, 20];
+            fingerTips.forEach(tipIdx => {
+              for (let k = 0; k < 2; k++) {
+                fireParticles.push(new FireParticle(pts[tipIdx].x, pts[tipIdx].y));
+              }
+            });
+          }
         }
-
-        // 1. ЖЕСТ 1: Щепоть (Большой + Указательный палец близко)
-        const distancePinch = Math.hypot(indexTip.x - thumbTip.x, indexTip.y - thumbTip.y);
-        if (distancePinch < 40) {
-          shapes.push(new Shape(indexTip.x, indexTip.y, 'square'));
-        }
-
-        // 2. ЖЕСТ 2: Виктори / 2 пальца близко друг к другу
-        const distancePeace = Math.hypot(indexTip.x - middleTip.x, indexTip.y - middleTip.y);
-        if (distancePeace < 45 && indexTip.y < landmarks[6].y * canvas.height) {
-          shapes.push(new Shape(indexTip.x, indexTip.y, 'triangle'));
-        }
-
-        // Отрисовка курсора на кончике пальца
-        ctx.fillStyle = '#ff007f';
-        ctx.beginPath();
-        ctx.arc(indexTip.x, indexTip.y, 12, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = '#ff007f';
       }
     }
 
-    // Класс магических частиц
-    class Particle {
+    // Анимированный Портал
+    function drawPortal(x, y, radius) {
+      portalAngle += 0.08;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(portalAngle);
+
+      const grad = ctx.createRadialGradient(0, 0, 5, 0, 0, radius);
+      grad.addColorStop(0, '#ffffff');
+      grad.addColorStop(0.4, '#ffaa00');
+      grad.addColorStop(0.8, '#ff0055');
+      grad.addColorStop(1, 'transparent');
+
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Вращающиеся лучи
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 3;
+      for (let i = 0; i < 6; i++) {
+        ctx.rotate((Math.PI * 2) / 6);
+        ctx.beginPath();
+        ctx.moveTo(10, 0);
+        ctx.lineTo(radius, 0);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // Огненная частица
+    class FireParticle {
       constructor(x, y) {
-        this.x = x;
-        this.y = y;
-        this.vx = (Math.random() - 0.5) * 4;
-        this.vy = (Math.random() - 0.5) * 4;
+        this.x = x + (Math.random() - 0.5) * 10;
+        this.y = y + (Math.random() - 0.5) * 10;
+        this.vx = (Math.random() - 0.5) * 2;
+        this.vy = -Math.random() * 4 - 1; // Летит вверх
+        this.size = Math.random() * 8 + 4;
         this.life = 1;
-        this.color = `hsl(${Math.random() * 60 + 180}, 100%, 60%)`;
+        this.color = Math.random() > 0.3 ? '#ff5500' : '#ffcc00';
       }
       update() {
         this.x += this.vx;
         this.y += this.vy;
-        this.life -= 0.03;
+        this.life -= 0.04;
+        this.size *= 0.95;
       }
       draw() {
         ctx.save();
         ctx.globalAlpha = Math.max(0, this.life);
         ctx.fillStyle = this.color;
         ctx.beginPath();
-        ctx.arc(this.x, this.y, 5, 0, Math.PI * 2);
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
-      }
-    }
-
-    // Класс геометрии (Квадраты и Треугольники)
-    class Shape {
-      constructor(x, y, type) {
-        this.x = x;
-        this.y = y;
-        this.type = type;
-        this.size = Math.random() * 30 + 30;
-        this.color = type === 'square' ? '#38bdf8' : '#a855f7';
-      }
-      draw() {
-        ctx.fillStyle = this.color;
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = this.color;
-        ctx.beginPath();
-        if (this.type === 'square') {
-          ctx.fillRect(this.x - this.size / 2, this.y - this.size / 2, this.size, this.size);
-        } else if (this.type === 'triangle') {
-          ctx.moveTo(this.x, this.y - this.size);
-          ctx.lineTo(this.x - this.size, this.y + this.size);
-          ctx.lineTo(this.x + this.size, this.y + this.size);
-          ctx.closePath();
-          ctx.fill();
-        }
       }
     }
 
@@ -182,23 +252,41 @@
     const hands = new Hands({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
     });
-
     hands.setOptions({
-      maxNumHands: 1,
+      maxNumHands: 2,
       modelComplexity: 1,
-      minDetectionConfidence: 0.7,
-      minTrackingConfidence: 0.7
+      minDetectionConfidence: 0.6,
+      minTrackingConfidence: 0.6
+    });
+    hands.onResults(onHandsResults);
+
+    // Инициализация MediaPipe Face Mesh
+    const faceMesh = new FaceMesh({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+    });
+    faceMesh.setOptions({
+      maxNumFaces: 1,
+      refineLandmarks: true,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+    faceMesh.onResults((results) => {
+      if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+        faceLandmarksData = results.multiFaceLandmarks[0];
+      } else {
+        faceLandmarksData = null;
+      }
     });
 
-    hands.onResults(onResults);
-
-    // Запуск веб-камеры
+    // Запуск камеры с адаптацией под телефон
     const camera = new Camera(videoElement, {
       onFrame: async () => {
         await hands.send({ image: videoElement });
+        await faceMesh.send({ image: videoElement });
       },
-      width: 640,
-      height: 480
+      facingMode: "user",
+      width: 1280,
+      height: 720
     });
     camera.start();
   </script>
