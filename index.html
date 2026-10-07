@@ -72,7 +72,7 @@
     <span class="chip" id="c-hands">РУКИ</span>
     <span class="chip" id="c-face">ЛИЦО</span>
   </div>
-  <div id="hint" class="hidden">Отойдите от камеры: нужны видны плечи и руки</div>
+  <div id="hint" class="hidden">Отойдите от камеры: должны быть видны плечи и руки</div>
   <div id="legend">
     <div class="card" id="g-helmet"><b>ШЛЕМ</b>ладонь к лицу</div>
     <div class="card" id="g-rep"><b>РЕПУЛЬСОР</b>открытая ладонь вверх</div>
@@ -80,17 +80,15 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js" crossorigin="anonymous"></script>
+<!-- Обновленные универсальные CDN скрипты -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
 
 <script>
 (() => {
 'use strict';
 
-/* ============================================================
-   Утилиты
-   ============================================================ */
 const $ = id => document.getElementById(id);
 const video = $('video'), cv = $('fx'), ctx = cv.getContext('2d');
 const TAU = Math.PI * 2;
@@ -103,12 +101,9 @@ const rnd = (a, b) => a + Math.random() * (b - a);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const nextFrame = () => new Promise(r => requestAnimationFrame(r));
 
-const HOLD_SEC = 1.0;   // сколько нужно удерживать жест
-const GRACE_MS = 150;   // допуск на кратковременную потерю трекинга
+const HOLD_SEC = 1.0;   
+const GRACE_MS = 150;   
 
-/* ============================================================
-   Размеры и проекция (object-fit: cover + зеркало)
-   ============================================================ */
 let W = innerWidth, H = innerHeight, DPR = 1, vw = 640, vh = 480, sc = 1, ox = 0, oy = 0, vig = null;
 
 function updateMap() {
@@ -118,7 +113,7 @@ function updateMap() {
   oy = (H - vh * sc) / 2;
 }
 function resize() {
-  DPR = Math.min(window.devicePixelRatio || 1, 1.5);   // ограничиваем DPR ради FPS на телефонах
+  DPR = Math.min(window.devicePixelRatio || 1, 1.5);   
   W = innerWidth; H = innerHeight;
   cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
   updateMap();
@@ -129,9 +124,6 @@ function resize() {
 addEventListener('resize', resize);
 addEventListener('orientationchange', () => setTimeout(resize, 200));
 
-/* ============================================================
-   Звук (короткие синтезированные эффекты)
-   ============================================================ */
 let ac = null;
 function initAudio() { try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); } catch (e) {} }
 function sfx(f1, f2, dur, type = 'square', vol = 0.07) {
@@ -144,9 +136,6 @@ function sfx(f1, f2, dur, type = 'square', vol = 0.07) {
   } catch (e) {}
 }
 
-/* ============================================================
-   Цвета и спрайты свечения (без shadowBlur — он убивает FPS на мобилках)
-   ============================================================ */
 const CYAN = [0, 229, 255], BLUE = [40, 110, 255], RED = [255, 40, 25], ORG = [255, 160, 20];
 const mixc = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
 const rgb = c => `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`;
@@ -166,14 +155,11 @@ function makeGlow(c) {
 }
 const glowA = makeGlow('0,229,255'), glowB = makeGlow('255,70,25');
 
-/* ============================================================
-   Состояние
-   ============================================================ */
 let running = false;
 let helmetOn = false, helmetT = 0;
-let od = false, mix = 0;           // перегрузка: цель и плавный коэффициент 0..1
-let suitA = 0;                     // прозрачность костюма
-let GA = 1, WS = 1;                // глобальные множители для neon()
+let od = false, mix = 0;           
+let suitA = 0;                     
+let GA = 1, WS = 1;                
 
 const P = { t: 0, tgt: null, cur: null };
 const S = Array.from({ length: 33 }, () => ({ x: 0, y: 0, v: 0 }));
@@ -188,16 +174,12 @@ let tL = S[11], tR = S[12], tHL = S[23], tHR = S[24];
 const RX = { x: 0, y: 0 };
 let BS = 150;
 
-/* ============================================================
-   Рисование: примитивы
-   ============================================================ */
 function glow(x, y, r, a) {
   ctx.globalCompositeOperation = 'lighter';
   if (mix < 0.99) { ctx.globalAlpha = a * GA * (1 - mix); ctx.drawImage(glowA, x - r, y - r, r * 2, r * 2); }
   if (mix > 0.01) { ctx.globalAlpha = a * GA * mix;       ctx.drawImage(glowB, x - r, y - r, r * 2, r * 2); }
   ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
 }
-// неоновая обводка текущего path: три прохода (гало, тело, раскалённое ядро)
 function neon(w, a = 1) {
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   ctx.globalCompositeOperation = 'lighter';
@@ -216,7 +198,7 @@ function hexPath(x, y, r, rot) {
   }
   ctx.closePath();
 }
-// билинейные координаты торса
+
 const qx = (u, v) => tL.x * (1 - u) * (1 - v) + tR.x * u * (1 - v) + tHL.x * (1 - u) * v + tHR.x * u * v;
 const qy = (u, v) => tL.y * (1 - u) * (1 - v) + tR.y * u * (1 - v) + tHL.y * (1 - u) * v + tHR.y * u * v;
 function qpath(a, close) {
@@ -231,9 +213,6 @@ const PLATE_LINES = [
   [[0.22, 0.74], [0.5, 0.8], [0.78, 0.74]], [[0.26, 0.86], [0.5, 0.92], [0.74, 0.86]], [[0.06, 0.97], [0.94, 0.97]]
 ];
 
-/* ============================================================
-   Костюм
-   ============================================================ */
 function limb(a, b, r1, r2, sw) {
   const dx = b.x - a.x, dy = b.y - a.y, l = Math.hypot(dx, dy);
   if (l < 4) return;
@@ -261,7 +240,7 @@ function drawSuit(now) {
   BS = sw;
   const hipsOK = S[23].v > 0.5 && S[24].v > 0.5;
   let HL = S[23], HR = S[24];
-  if (!hipsOK) {                      // бёдра не видны — достраиваем торс
+  if (!hipsOK) {                      
     let nx = -(R.y - L.y), ny = (R.x - L.x);
     if (ny < 0) { nx = -nx; ny = -ny; }
     eHL.x = L.x + nx * 1.5; eHL.y = L.y + ny * 1.5; eHR.x = R.x + nx * 1.5; eHR.y = R.y + ny * 1.5;
@@ -269,12 +248,10 @@ function drawSuit(now) {
   }
   tL = L; tR = R; tHL = HL; tHR = HR;
 
-  // подкостюм + нагрудник
   ctx.beginPath(); qpath(TORSO, true); fillCur(cs.sec, 0.07); neon(0.8, 0.45);
   ctx.beginPath(); qpath(PLATE, true); fillCur(cs.sec, 0.17); neon(1.7);
   ctx.beginPath(); for (const s of PLATE_LINES) qpath(s, false); neon(1.1, 0.8);
 
-  // конечности
   for (const [a, b, c] of [[11, 13, 15], [12, 14, 16]]) {
     if (S[b].v > 0.4) { limb(S[a], S[b], 0.11, 0.09, sw); if (S[c].v > 0.4) limb(S[b], S[c], 0.09, 0.065, sw); }
   }
@@ -282,7 +259,7 @@ function drawSuit(now) {
   for (const [a, b, c] of legs) {
     if (S[b].v > 0.5) { limb(S[a], S[b], 0.14, 0.11, sw); if (S[c].v > 0.5) limb(S[b], S[c], 0.11, 0.075, sw); }
   }
-  // наплечники, налокотники, наколенники, перчатки
+  
   pad(L, sw * 0.2, t); pad(R, sw * 0.2, t);
   for (const i of [13, 14]) if (S[i].v > 0.4) pad(S[i], sw * 0.11, t);
   if (hipsOK) for (const i of [25, 26]) if (S[i].v > 0.5) pad(S[i], sw * 0.13, t);
@@ -290,12 +267,10 @@ function drawSuit(now) {
     ctx.beginPath(); ctx.arc(S[i].x, S[i].y, sw * 0.085, 0, TAU); neon(1.4);
   }
 
-  // реактор
   RX.x = qx(0.5, 0.3); RX.y = qy(0.5, 0.3);
   const rx = RX.x, ry = RX.y, rr = Math.max(8, sw * 0.13);
   const pulse = 0.78 + 0.22 * Math.sin(t * (4 + 10 * mix));
 
-  // энергия бежит по броне
   const bones = [[11, 13], [13, 15], [12, 14], [14, 16]];
   bones.forEach((b, i) => {
     if (S[b[0]].v < 0.4 || S[b[1]].v < 0.4) return;
@@ -330,9 +305,6 @@ function drawSuit(now) {
   ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
 }
 
-/* ============================================================
-   Шлем + забрало
-   ============================================================ */
 function drawHelmet(now) {
   if (!FA.ok) return;
   const t = now * 0.001;
@@ -340,7 +312,7 @@ function drawHelmet(now) {
   ctx.translate(FA.cx, FA.cy); ctx.rotate(FA.ang);
   const a = FA.w / 2, b = FA.h / 2;
 
-  if (helmetT < 0.02) {                         // шлем снят: прицельная рамка вокруг лица
+  if (helmetT < 0.02) {                         
     GA = 0.7 * Math.max(suitA, 0.4);
     const hx = a * 1.3, hy = b * 1.3, c = Math.min(hx, hy) * 0.38;
     ctx.beginPath();
@@ -363,7 +335,7 @@ function drawHelmet(now) {
     ctx.closePath();
   };
   shellPath(); fillCur(cs.sec, 0.22); neon(2);
-  // гребень, лоб, уши
+
   ctx.beginPath();
   ctx.moveTo(0, -1.22 * b); ctx.lineTo(0, -0.55 * b);
   ctx.moveTo(-0.95 * a, -0.45 * b); ctx.lineTo(0, -0.62 * b); ctx.lineTo(0.95 * a, -0.45 * b);
@@ -374,7 +346,6 @@ function drawHelmet(now) {
     ctx.beginPath(); ctx.arc(s * 1.12 * a, 0.12 * b, a * 0.26, 0, TAU); fillCur(cs.sec, 0.3); neon(1.4);
   }
 
-  // забрало опускается сверху вниз
   if (vis > 0.01) {
     ctx.save();
     ctx.beginPath(); ctx.rect(-2 * a, -0.6 * b, 4 * a, vis * 2 * b); ctx.clip();
@@ -388,19 +359,18 @@ function drawHelmet(now) {
     const g = ctx.createLinearGradient(0, -0.6 * b, 0, 1.3 * b);
     g.addColorStop(0, 'rgba(10,22,34,0.95)'); g.addColorStop(1, 'rgba(2,6,12,0.98)');
     ctx.globalAlpha = shell; ctx.fillStyle = g; ctx.fill(); ctx.globalAlpha = 1;
-    // блики
+
     ctx.beginPath();
     ctx.moveTo(-0.9 * a, -0.4 * b); ctx.lineTo(-0.3 * a, 0.9 * b);
     ctx.moveTo(-0.6 * a, -0.45 * b); ctx.lineTo(0.0, 0.9 * b);
     ctx.globalAlpha = 0.08 * GA; ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(2, a * 0.1); ctx.stroke(); ctx.globalAlpha = 1;
-    // вентиляция
+
     ctx.beginPath();
     for (let i = 0; i < 3; i++) { const y = (0.82 + i * 0.1) * b; ctx.moveTo(-0.32 * a, y); ctx.lineTo(0.32 * a, y); }
     neon(1, 0.7);
     visor(); neon(1.8);
     ctx.restore();
 
-    // неоновые глаза
     if (vis > 0.85) {
       let e = Math.min(1, (vis - 0.85) / 0.15);
       if (vis < 1 || Math.sin(t * 40) > 0.97) e *= 0.6 + 0.4 * Math.random();
@@ -412,16 +382,12 @@ function drawHelmet(now) {
         ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = e * 0.95; ctx.fillStyle = '#fff'; ctx.fill();
         ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
         GA = e; glow(s * 0.5 * a, 0.02 * b, a * 0.9, 0.7);
-        // glow() рисует в системе координат шлема — это нужно
       }
     }
   }
   ctx.restore();
 }
 
-/* ============================================================
-   Руки, репульсор, частицы, молнии
-   ============================================================ */
 const FING = [[0, 1, 2, 3, 4], [0, 5, 6, 7, 8], [0, 9, 10, 11, 12], [0, 13, 14, 15, 16], [0, 17, 18, 19, 20], [5, 9, 13, 17]];
 
 function drawHands(now) {
@@ -481,7 +447,7 @@ function drawRepulsor(h, r, now) {
   const pw = r.power, x = h.palm.x, y = h.palm.y, ps = h.ps, t = now * 0.001;
   const pulse = 0.85 + 0.15 * Math.sin(t * 18);
   GA = pw;
-  // луч вдоль направления ладони
+
   const d = h.dir, len = Math.min(Math.max(W, H) * 0.9, 900), nx = -d.y, ny = d.x;
   const w0 = ps * 0.3 * pw, w1 = ps * 1.1 * pw, ex = x + d.x * len, ey = y + d.y * len;
   const g = ctx.createLinearGradient(x, y, ex, ey);
@@ -490,7 +456,7 @@ function drawRepulsor(h, r, now) {
   ctx.beginPath(); ctx.moveTo(x + nx * w0, y + ny * w0); ctx.lineTo(ex + nx * w1, ey + ny * w1);
   ctx.lineTo(ex - nx * w1, ey - ny * w1); ctx.lineTo(x - nx * w0, y - ny * w0); ctx.closePath(); ctx.fill();
   ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
-  // свечение и кольца
+
   glow(x, y, ps * 3.2 * pulse, 1);
   glow(x, y, ps * 1.3, 1);
   for (let k = 0; k < 3; k++) {
@@ -543,7 +509,7 @@ function drawLightning(now) {
   ctx.beginPath();
   for (const a of arcs) { ctx.moveTo(a[0].x, a[0].y); for (let i = 1; i < a.length; i++) ctx.lineTo(a[i].x, a[i].y); }
   neon(1.4, 0.7 + 0.3 * Math.random());
-  // искры
+
   if (mix > 0.4 && suitA > 0.1) {
     for (let i = 0; i < 2; i++) {
       const j = [11, 12, 13, 14, 15, 16][Math.random() * 6 | 0];
@@ -554,9 +520,6 @@ function drawLightning(now) {
   }
 }
 
-/* ============================================================
-   Круговой индикатор удержания + вспышки
-   ============================================================ */
 const bursts = [];
 function burst(x, y, c) { bursts.push({ x, y, t: 0, c }); }
 function drawBursts(dt) {
@@ -586,12 +549,9 @@ function drawRing(x, y, p, color, label) {
   ctx.fillText(label, x, y + R + 16);
 }
 
-/* ============================================================
-   Трекинг: сглаживание и проекция
-   ============================================================ */
 function updateTracking(now, dt) {
   const k = 1 - Math.exp(-dt * 20);
-  // --- поза
+
   poseOK = false;
   if (P.cur && P.tgt && now - P.t < 600) {
     for (let i = 0; i < 33; i++) {
@@ -601,7 +561,7 @@ function updateTracking(now, dt) {
     }
     poseOK = S[11].v > 0.5 && S[12].v > 0.5 && dist(S[11], S[12]) > 25;
   }
-  // --- руки
+
   hands.length = 0;
   if (now - HD.t < 600) {
     const k2 = 1 - Math.exp(-dt * 25);
@@ -626,7 +586,7 @@ function updateTracking(now, dt) {
       hands.push({ key: h.key, p, palm, ps, dir, oc, inFace: false });
     }
   }
-  // --- лицо
+
   let tg = null;
   if (FT.tgt && now - FT.t < 700) {
     if (!FT.cur) FT.cur = FT.tgt.map(p => ({ x: p.x, y: p.y }));
@@ -636,7 +596,7 @@ function updateTracking(now, dt) {
     }
     let a = FP[2], b = FP[3]; if (b.x < a.x) { const tt = a; a = b; b = tt; }
     tg = { cx: (FP[0].x + FP[1].x) / 2, cy: (FP[0].y + FP[1].y) / 2, w: dist(FP[2], FP[3]), h: dist(FP[0], FP[1]), ang: Math.atan2(b.y - a.y, b.x - a.x) };
-  } else if (poseOK && S[7].v > 0.3 && S[8].v > 0.3) {  // запасной вариант по ушам
+  } else if (poseOK && S[7].v > 0.3 && S[8].v > 0.3) {  
     const e1 = S[7], e2 = S[8], w = dist(e1, e2) * 0.95;
     let a = e1, b = e2; if (b.x < a.x) { a = e2; b = e1; }
     tg = { cx: (e1.x + e2.x) / 4 + S[0].x / 2, cy: (e1.y + e2.y) / 4 + S[0].y / 2 + w * 0.05, w, h: w * 1.4, ang: Math.atan2(b.y - a.y, b.x - a.x) };
@@ -649,9 +609,6 @@ function updateTracking(now, dt) {
   }
 }
 
-/* ============================================================
-   Жесты с удержанием (debounce / hold)
-   ============================================================ */
 const G = {
   helmet: { p: 0, lock: false, last: -1e9, rel: 0, x: 0, y: 0 },
   od:     { p: 0, lock: false, last: -1e9, rel: 0, x: 0, y: 0 }
@@ -672,7 +629,6 @@ function hold(h, cond, x, y, dt, now) {
 }
 
 function updateGestures(now, dt) {
-  // 1) ладонь на лице
   let hc = false, hx = 0, hy = 0;
   if (FA.ok) {
     for (const h of hands) {
@@ -684,7 +640,7 @@ function updateGestures(now, dt) {
       }
     }
   }
-  // 3) руки крестом
+
   let cc = false, cx = 0, cy = 0;
   if (poseOK && S[15].v > 0.5 && S[16].v > 0.5) {
     const L = S[11], R = S[12], w1 = S[15], w2 = S[16], sw = dist(L, R);
@@ -693,7 +649,7 @@ function updateGestures(now, dt) {
     cc = dxw < -sw * 0.04 && inBody;
     cx = (w1.x + w2.x) / 2; cy = (w1.y + w2.y) / 2;
   }
-  // 2) репульсор — отдельно для каждой руки
+
   const present = new Set();
   for (const h of hands) {
     present.add(h.key);
@@ -722,15 +678,12 @@ function updateGestures(now, dt) {
   }
 }
 
-/* ============================================================
-   Главный цикл рендера (лимит 60 FPS по таймеру, пауза в фоне)
-   ============================================================ */
 let last = 0, frames = 0, fpsT = 0, lastHud = '';
 function render() {
   requestAnimationFrame(render);
   if (!running || document.hidden) return;
   const now = performance.now();
-  if (now - last < 14) return;                 // ≈60 FPS максимум, экономим батарею на 90/120 Гц экранах
+  if (now - last < 14) return;                 
   const dt = Math.min((now - last) / 1000, 0.05); last = now;
 
   if (video.videoWidth && (video.videoWidth !== vw || video.videoHeight !== vh)) updateMap();
@@ -748,7 +701,7 @@ function render() {
   cs.main = rgb(cM); cs.sec = rgb(cS); cs.core = rgb(mixc([225, 255, 255], [255, 238, 200], mix));
   WS = 1 + 0.35 * mix * Math.sin(now * 0.016);
 
-  if (mix > 0.01) {                             // красная пульсирующая виньетка
+  if (mix > 0.01) {                             
     ctx.globalAlpha = mix * (0.5 + 0.5 * Math.sin(now * 0.012)) * 0.9; ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1;
   }
 
@@ -765,7 +718,6 @@ function render() {
   drawRing(G.od.x, G.od.y, G.od.p, '#ff4a2a', od ? 'ОТКЛЮЧИТЬ' : 'ПЕРЕГРУЗКА');
   for (const key in REP) { const r = REP[key]; drawRing(r.x, r.y, r.p, '#ffd54a', 'РЕПУЛЬСОР'); }
 
-  // HUD
   frames++;
   if (now - fpsT > 500) {
     $('c-fps').textContent = 'FPS ' + Math.round(frames * 1000 / (now - fpsT));
@@ -786,12 +738,8 @@ function render() {
   }
 }
 
-/* ============================================================
-   MediaPipe: загрузка и циклический запуск моделей
-   ============================================================ */
 const models = {};
 async function detectLoop() {
-  // pose и hands чаще, face mesh реже — так нагрузка на телефон ниже
   const seq = ['pose', 'hands', 'pose', 'hands', 'face'];
   const lastT = { pose: -1, hands: -1, face: -1 };
   let i = 0, tries = 0;
@@ -806,7 +754,7 @@ async function detectLoop() {
 }
 
 function buildModels() {
-  const pose = new Pose({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${f}` });
+  const pose = new Pose({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}` });
   pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, enableSegmentation: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
   pose.onResults(r => {
     if (!r.poseLandmarks) return;
@@ -814,7 +762,7 @@ function buildModels() {
     if (!P.cur) P.cur = r.poseLandmarks.map(p => ({ x: p.x, y: p.y, v: p.visibility || 0 }));
   });
 
-  const hnd = new Hands({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${f}` });
+  const hnd = new Hands({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
   hnd.setOptions({ maxNumHands: 2, modelComplexity: 0, minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 });
   hnd.onResults(r => {
     HD.t = performance.now(); HD.list = [];
@@ -828,7 +776,7 @@ function buildModels() {
     }
   });
 
-  const face = new FaceMesh({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/${f}` });
+  const face = new FaceMesh({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}` });
   face.setOptions({ maxNumFaces: 1, refineLandmarks: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
   face.onResults(r => {
     if (!r.multiFaceLandmarks || !r.multiFaceLandmarks[0]) return;
@@ -838,16 +786,13 @@ function buildModels() {
   models.pose = pose; models.hands = hnd; models.face = face;
 }
 
-/* ============================================================
-   Запуск
-   ============================================================ */
-const btn = $('btn'), msg = $('msg');
+const btn = $('btn'), msg =$('msg');
 function setMsg(t, err) { msg.textContent = t; msg.classList.toggle('err', !!err); }
 
 btn.addEventListener('click', async () => {
   btn.disabled = true; initAudio();
   if (typeof Pose === 'undefined' || typeof Hands === 'undefined' || typeof FaceMesh === 'undefined') {
-    setMsg('Не удалось загрузить MediaPipe с CDN. Проверьте интернет и обновите страницу.', true); btn.disabled = false; return;
+    setMsg('Не удалось загрузить MediaPipe с CDN. Проверьте интернет.', true); btn.disabled = false; return;
   }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     setMsg('Камера доступна только по HTTPS или на localhost.', true); btn.disabled = false; return;
@@ -863,17 +808,37 @@ btn.addEventListener('click', async () => {
     setMsg('Нет доступа к камере: ' + (e.message || e.name), true); btn.disabled = false; return;
   }
   resize();
-  setMsg('Загружаю нейросети (Pose, Hands, Face Mesh)…');
+
+  setMsg('Загружаю нейросети…');
   try {
     buildModels();
-    await models.pose.initialize();  setMsg('Pose ✓  загружаю Hands…');
-    await models.hands.initialize(); setMsg('Pose ✓  Hands ✓  загружаю Face Mesh…');
-    await models.face.initialize();
+    
+    // Безопасная инициализация моделей с таймаутом
+    const loadWithTimeout = (promise, name, ms = 6000) => 
+      Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`Таймаут ${name}`)), ms))
+      ]);
+
+    await loadWithTimeout(models.pose.initialize(), 'Pose');
+    setMsg('Pose ✓ | Загрузка Hands…');
+    
+    await loadWithTimeout(models.hands.initialize(), 'Hands');
+    setMsg('Pose ✓ | Hands ✓ | Загрузка Face Mesh…');
+    
+    try {
+      await loadWithTimeout(models.face.initialize(), 'Face Mesh', 4000);
+    } catch (faceErr) {
+      console.warn('Face Mesh не ответил вовремя, включен запасной трекинг лица через Pose:', faceErr);
+    }
+
   } catch (e) {
-    setMsg('Ошибка загрузки моделей: ' + (e.message || e), true); btn.disabled = false; return;
+    setMsg('Ошибка загрузки моделей: ' + (e.message || e), true); 
+    btn.disabled = false; 
+    return;
   }
-  $('start').classList.add('hidden');
-  $('hud').classList.remove('hidden');
+
+  $('start').classList.add('hidden');$('hud').classList.remove('hidden');
   running = true;
   detectLoop();
 });
