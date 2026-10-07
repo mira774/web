@@ -19,24 +19,26 @@
   
   #start {
     position: fixed; inset: 0; z-index: 10; display: flex;
-    align-items: center; justify-content: center; background: rgba(5,10,15,0.9);
+    align-items: center; justify-content: center; background: rgba(5,10,15,0.92);
     color: #00e5ff; text-align: center; font-family: system-ui, sans-serif;
   }
   .btn {
     font-size: 18px; font-weight: bold; padding: 16px 36px; border-radius: 50px;
     background: #00e5ff; color: #000; border: none; cursor: pointer;
-    box-shadow: 0 0 20px #00e5ff; margin-top: 20px;
+    box-shadow: 0 0 20px #00e5ff; margin-top: 20px; transition: transform 0.2s;
   }
+  .btn:active { transform: scale(0.95); }
+  
   .hint {
     position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
     z-index: 5; background: rgba(0,0,0,0.7); color: #00e5ff; padding: 10px 20px;
     border-radius: 20px; border: 1px solid #00e5ff; font-size: 13px; text-align: center;
+    pointer-events: none;
   }
 </style>
 
-<!-- Подключение 3D-движка Three.js и MediaPipe Pose -->
+<!-- Подключение Three.js и MediaPipe Pose -->
 <script src="https://cdnjs.cloudflare.net/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -47,7 +49,7 @@
 <div id="start">
   <div>
     <h1>NANO PARTICLE SUIT 3D</h1>
-    <p style="color:#aaa; margin-top:8px;">Объёмный костюм из 2000+ силовых частиц</p>
+    <p style="color:#aaa; margin-top:8px;">Объёмный костюм из 2500+ силовых частиц</p>
     <button class="btn" id="startBtn">ВКЛЮЧИТЬ КОСТЮМ</button>
   </div>
 </div>
@@ -64,7 +66,7 @@ const startScreen = document.getElementById('start');
 
 let W = window.innerWidth, H = window.innerHeight;
 
-// --- 1. НАСТРОЙКА THREE.JS (3D СЦЕНА) ---
+// --- 1. THREE.JS СЦЕНА ---
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 1000);
 camera.position.set(0, 0, 5);
@@ -80,30 +82,23 @@ window.addEventListener('resize', () => {
   renderer.setSize(W, H);
 });
 
-// --- 2. СОЗДАНИЕ СИСТЕМЫ ЧАСТИЦ (PARTICLE SYSTEM) ---
+// --- 2. СИСТЕМА 3D ЧАСТИЦ ---
 const PARTICLE_COUNT = 2500;
 const geometry = new THREE.BufferGeometry();
 const positions = new Float32Array(PARTICLE_COUNT * 3);
 const colors = new Float32Array(PARTICLE_COUNT * 3);
 
-// Инициализация частиц в нулевых координатах
 for (let i = 0; i < PARTICLE_COUNT * 3; i += 3) {
-  positions[i] = 0;
-  positions[i + 1] = 0;
-  positions[i + 2] = 0;
-
-  // Неоново-голубой цвет с фиолетовыми переливами
-  colors[i] = 0.0;                       // R
-  colors[i + 1] = 0.8 + Math.random() * 0.2; // G
-  colors[i + 2] = 1.0;                       // B
+  positions[i] = 0; positions[i + 1] = 0; positions[i + 2] = 0;
+  colors[i] = 0.0;
+  colors[i + 1] = 0.8 + Math.random() * 0.2;
+  colors[i + 2] = 1.0;
 }
 
 geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-// Материал свечения частиц
-const textureLoader = new THREE.TextureLoader();
-// Создаем текстуру мягкой светящейся точки через Canvas
+// Создание текстуры светящейся точки
 const particleCanvas = document.createElement('canvas');
 particleCanvas.width = 16; particleCanvas.height = 16;
 const pCtx = particleCanvas.getContext('2d');
@@ -116,7 +111,7 @@ pCtx.fillStyle = grad; pCtx.fillRect(0, 0, 16, 16);
 const pTexture = new THREE.CanvasTexture(particleCanvas);
 
 const material = new THREE.PointsMaterial({
-  size: 0.06,
+  size: 0.07,
   map: pTexture,
   transparent: true,
   blending: THREE.AdditiveBlending,
@@ -127,48 +122,41 @@ const material = new THREE.PointsMaterial({
 const particleSystem = new THREE.Points(geometry, material);
 scene.add(particleSystem);
 
-// --- 3. ПОСТРОЕНИЕ 3D ОБЪЕМА ПО ВОКРУГ СУСТАВОВ ---
-// Соединения скелета тела
+// --- 3. ОБЪЕМ ВОКРУГ ТЕЛА ---
 const BONES = [
-  [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], // Руки и плечи
-  [11, 23], [12, 24], [23, 24],                    // Торс
-  [23, 25], [24, 26], [25, 27], [26, 28]             // Ноги
+  [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
+  [11, 23], [12, 24], [23, 24],
+  [23, 25], [24, 26], [25, 27], [26, 28]
 ];
 
 function updateBodyParticles(landmarks) {
   const posAttr = geometry.attributes.position;
   let pIdx = 0;
 
-  // Конвертация координат MediaPipe в координаты 3D мира Three.js
-  const to3D = (lm) => {
-    return new THREE.Vector3(
-      -(lm.x - 0.5) * 4.5, // Z-зеркалирование
-      -(lm.y - 0.5) * 3.2,
-      -lm.z * 2
-    );
-  };
+  const to3D = (lm) => new THREE.Vector3(
+    -(lm.x - 0.5) * 4.5,
+    -(lm.y - 0.5) * 3.2,
+    -lm.z * 2
+  );
 
-  // Генерируем объемные цилиндры из частиц вокруг каждой кости
   BONES.forEach(([i, j]) => {
     if (!landmarks[i] || !landmarks[j]) return;
     const pA = to3D(landmarks[i]);
     const pB = to3D(landmarks[j]);
 
     const particlesPerBone = 180;
-    const radius = 0.18; // Радиус толщины костюма вокруг тела
+    const radius = 0.18;
 
     for (let k = 0; k < particlesPerBone; k++) {
       if (pIdx >= PARTICLE_COUNT) break;
 
-      const t = k / particlesPerBone; // Положение вдоль кости (от 0 до 1)
-      const angle = (k * 137.5) * (Math.PI / 180) + performance.now() * 0.002; // Спираль
+      const t = k / particlesPerBone;
+      const angle = (k * 137.5) * (Math.PI / 180) + performance.now() * 0.002;
 
-      // Точка на прямой линии между суставами
       const cx = pA.x + (pB.x - pA.x) * t;
       const cy = pA.y + (pB.y - pA.y) * t;
       const cz = pA.z + (pB.z - pA.z) * t;
 
-      // Смещение по кругу для создания объема спереди, сзади и сбоку
       const offsetX = Math.cos(angle) * radius;
       const offsetZ = Math.sin(angle) * radius;
 
@@ -177,7 +165,6 @@ function updateBodyParticles(landmarks) {
     }
   });
 
-  // Остаток частиц пускаем анимированной волной вокруг головы
   if (landmarks[0]) {
     const head = to3D(landmarks[0]);
     while (pIdx < PARTICLE_COUNT) {
@@ -197,16 +184,16 @@ function updateBodyParticles(landmarks) {
   posAttr.needsUpdate = true;
 }
 
-// --- 4. МЕДИАПАЙП И КАМЕРА ---
+// --- 4. MEDIAPIPE POSE ---
 const pose = new Pose({
   locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
 });
 
 pose.setOptions({
-  modelComplexity: 1,
+  modelComplexity: 0,
   smoothLandmarks: true,
-  minDetectionConfidence: 0.6,
-  minTrackingConfidence: 0.6
+  minDetectionConfidence: 0.5,
+  minTrackingConfidence: 0.5
 });
 
 pose.onResults((results) => {
@@ -215,28 +202,40 @@ pose.onResults((results) => {
   }
 });
 
-// Анимация 3D
 function animate() {
   requestAnimationFrame(animate);
-  particleSystem.rotation.y = Math.sin(performance.now() * 0.001) * 0.05; // Легкое 3D покачивание
+  particleSystem.rotation.y = Math.sin(performance.now() * 0.001) * 0.05;
   renderer.render(scene, camera);
 }
 animate();
 
-// Запуск при клике
-startBtn.addEventListener('click', async () => {
-  startScreen.style.display = 'none';
+// --- 5. ПРЯМОЙ ЗАПУСК КАМЕРЫ ---
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false
+    });
+    video.srcObject = stream;
+    await video.play();
 
-  const cameraMedia = new Camera(video, {
-    onFrame: async () => {
-      await pose.send({ image: video });
-    },
-    facingMode: "user",
-    width: 640,
-    height: 480
-  });
-  cameraMedia.start();
-});
+    startScreen.style.display = 'none';
+
+    // Фоновый цикл отправки кадров
+    async function processVideo() {
+      if (video.readyState >= 2) {
+        await pose.send({ image: video });
+      }
+      requestAnimationFrame(processVideo);
+    }
+    processVideo();
+
+  } catch (err) {
+    alert('Не удалось открыть камеру: ' + err.message);
+  }
+}
+
+startBtn.addEventListener('click', startCamera);
 </script>
 </body>
 </html>
