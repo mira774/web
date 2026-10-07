@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Быстрый Веном & Магия Жестов</title>
+  <title>Магический Трекинг</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: 'Segoe UI', Arial, sans-serif; }
@@ -15,27 +15,28 @@
     #flash {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       background: #fff; opacity: 0; pointer-events: none; z-index: 10;
-      transition: opacity 0.1s ease-out;
+      transition: opacity 0.15s ease-out;
     }
-    /* Надпись в углу для сердечка */
+    /* Плашка при сердечке */
     #heart-text {
       position: absolute;
       top: 25px;
       right: 25px;
       z-index: 15;
       color: #ff2a85;
-      font-size: 26px;
+      font-size: 24px;
       font-weight: 900;
       text-transform: uppercase;
       text-shadow: 0 0 10px #ff2a85, 0 0 20px #ff0055, 0 0 30px #ffffff;
       opacity: 0;
-      transform: scale(0.7);
-      transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      transform: scale(0.8);
+      transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       pointer-events: none;
-      background: rgba(0, 0, 0, 0.4);
-      padding: 10px 18px;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 12px 20px;
       border-radius: 16px;
       border: 2px solid #ff2a85;
+      backdrop-filter: blur(4px);
     }
     #heart-text.active {
       opacity: 1;
@@ -44,11 +45,11 @@
     .hint {
       position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%);
       z-index: 5; background: rgba(0,0,0,0.8); color: #fff; padding: 10px 18px;
-      border-radius: 15px; font-size: 12px; text-align: center; border: 1px solid #333;
+      border-radius: 15px; font-size: 13px; text-align: center; border: 1px solid #333;
     }
   </style>
 
-  <!-- Подключение MediaPipe Hands & Face Mesh -->
+  <!-- Подключение нейросетей MediaPipe -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
@@ -61,8 +62,7 @@
   <canvas id="canvas"></canvas>
 
   <div class="hint">
-    👌 <b>ОК:</b> Веном | 🤌 <b>Щелчок:</b> Танос | ✌️ <b>Виктори:</b> Рука-Веном<br>
-    🫶 <b>Сердечко:</b> НУРИК ЛЮБИТ ФАРЗОНУ))
+    🫶 <b>Сердечко:</b> НУРИК ЛЮБИТ ФАРЗОНУ)) | 🤌 <b>Щелчок:</b> Вспышка Таноса
   </div>
 
   <script>
@@ -78,25 +78,28 @@
     resize();
 
     let facePoints = null;
-    let venomHandProgress = 0;
-    let lastSnapState = false;
     const heartParticles = [];
+
+    // --- СЧЕТЧИКИ ДЛЯ ЗАЩИТЫ ОТ ЛОЖНЫХ СРАБАТЫВАНИЙ ---
+    let heartFramesCount = 0;
+    let snapFramesCount = 0;
+    const REQUIRED_FRAMES = 8; // Нужно удерживать жест минимум 8 кадров подряд
+    let snapCooldown = false;
 
     const CONNECTIONS = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
 
     function triggerThanosSnap() {
       flashEl.style.opacity = '1';
-      setTimeout(() => { flashEl.style.opacity = '0'; }, 500);
+      setTimeout(() => { flashEl.style.opacity = '0'; }, 400);
     }
 
-    // Класс частичек-сердечек
     class HeartParticle {
       constructor(x, y) {
-        this.x = x + (Math.random() - 0.5) * 20;
-        this.y = y + (Math.random() - 0.5) * 20;
+        this.x = x + (Math.random() - 0.5) * 30;
+        this.y = y + (Math.random() - 0.5) * 30;
         this.vy = -Math.random() * 3 - 2;
         this.vx = (Math.random() - 0.5) * 2;
-        this.size = Math.random() * 12 + 10;
+        this.size = Math.random() * 14 + 12;
         this.life = 1;
       }
       update() {
@@ -116,20 +119,33 @@
     function onResults(results) {
       ctx.clearRect(0, 0, w, h);
 
-      let isOKGesture = false;
-      let isHeartGesture = false;
+      // 1. ОТРИСОВКА СОТЕН ТОЧЕК НА ВСЕМ ЛИЦЕ
+      if (facePoints) {
+        ctx.fillStyle = 'rgba(0, 240, 255, 0.75)';
+        for (let i = 0; i < facePoints.length; i++) {
+          const pt = facePoints[i];
+          const x = (1 - pt.x) * w;
+          const y = pt.y * h;
+          ctx.beginPath();
+          ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
 
-      // Отрисовка летящих сердечек
+      // 2. ОТРИСОВКА АНИМАЦИИ СЕРДЕЧЕК
       for (let i = heartParticles.length - 1; i >= 0; i--) {
         heartParticles[i].update();
         heartParticles[i].draw();
         if (heartParticles[i].life <= 0) heartParticles.splice(i, 1);
       }
 
+      let rawHeartDetected = false;
+      let rawSnapDetected = false;
+
       if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
         const handsCount = results.multiHandLandmarks.length;
 
-        // ПРОВЕРКА СЕРДЕЧКА ДВУМЯ РУКАМИ
+        // ПРОВЕРКА СЕРДЕЧКА (2 РУКИ)
         if (handsCount === 2) {
           const h1 = results.multiHandLandmarks[0].map(p => ({ x: (1 - p.x) * w, y: p.y * h }));
           const h2 = results.multiHandLandmarks[1].map(p => ({ x: (1 - p.x) * w, y: p.y * h }));
@@ -137,67 +153,38 @@
           const indexDist = Math.hypot(h1[8].x - h2[8].x, h1[8].y - h2[8].y);
           const thumbDist = Math.hypot(h1[4].x - h2[4].x, h1[4].y - h2[4].y);
 
-          if (indexDist < 70 && thumbDist < 70) {
-            isHeartGesture = true;
+          // Контроль распада рук (пальцы сближены, но не слишком далеко от суставов)
+          if (indexDist < 60 && thumbDist < 60) {
+            rawHeartDetected = true;
             const midX = (h1[8].x + h2[8].x) / 2;
             const midY = (h1[8].y + h2[8].y) / 2;
-            for (let k = 0; k < 2; k++) heartParticles.push(new HeartParticle(midX, midY));
+            heartParticles.push(new HeartParticle(midX, midY));
           }
         }
 
         for (const landmarks of results.multiHandLandmarks) {
           const pts = landmarks.map(p => ({ x: (1 - p.x) * w, y: p.y * h }));
 
-          // Жест ОК
-          const okDist = Math.hypot(pts[4].x - pts[8].x, pts[4].y - pts[8].y);
-          if (okDist < 35) isOKGesture = true;
-
-          // Сердечко одной рукой (пальцы сложены в сердечко)
-          const singleHandHeart = Math.hypot(pts[8].x - pts[4].x, pts[8].y - pts[4].y) < 30 && pts[12].y > pts[10].y;
-          if (singleHandHeart && handsCount === 1) {
-            isHeartGesture = true;
+          // СЕРДЕЧКО ОДНОЙ РУКОЙ
+          const singleHeart = Math.hypot(pts[8].x - pts[4].x, pts[8].y - pts[4].y) < 30 && pts[12].y > pts[10].y;
+          if (singleHeart && handsCount === 1) {
+            rawHeartDetected = true;
             heartParticles.push(new HeartParticle((pts[8].x + pts[4].x)/2, (pts[8].y + pts[4].y)/2));
           }
 
-          // Щелчок Таноса
+          // ЩЕЛЧОК ТАНОСА (Большой pt[4] + Средний pt[12])
           const snapDist = Math.hypot(pts[4].x - pts[12].x, pts[4].y - pts[12].y);
-          if (snapDist < 25 && !lastSnapState) {
-            triggerThanosSnap();
-            lastSnapState = true;
-          } else if (snapDist > 50) {
-            lastSnapState = false;
+          if (snapDist < 25) {
+            rawSnapDetected = true;
           }
 
-          // Виктори / Веном
-          const isTriangle = pts[8].y < pts[6].y && pts[12].y < pts[10].y && pts[16].y > pts[14].y;
-          if (isTriangle) {
-            if (venomHandProgress < 1) venomHandProgress += 0.05;
-          } else {
-            if (venomHandProgress > 0) venomHandProgress -= 0.05;
-          }
-
-          // Отрисовка скелета
-          ctx.strokeStyle = '#00ffcc';
-          ctx.lineWidth = 3;
+          // Отрисовка точек и скелета руки
+          ctx.strokeStyle = 'rgba(0, 255, 200, 0.6)';
+          ctx.lineWidth = 2;
           for (const [i, j] of CONNECTIONS) {
             ctx.beginPath();
             ctx.moveTo(pts[i].x, pts[i].y);
             ctx.lineTo(pts[j].x, pts[j].y);
-            ctx.stroke();
-          }
-
-          // Заливка Веномом
-          if (venomHandProgress > 0) {
-            ctx.fillStyle = `rgba(5, 5, 5, ${venomHandProgress})`;
-            ctx.beginPath();
-            ctx.moveTo(pts[0].x, pts[0].y);
-            for (let i = 1; i < pts.length; i++) {
-              ctx.lineTo(pts[i].x + (Math.random() - 0.5) * 6, pts[i].y + (Math.random() - 0.5) * 6);
-            }
-            ctx.closePath();
-            ctx.fill();
-            ctx.strokeStyle = '#a855f7';
-            ctx.lineWidth = 2;
             ctx.stroke();
           }
 
@@ -210,41 +197,41 @@
         }
       }
 
-      // Показ надписи при сердечке
-      if (isHeartGesture) {
-        heartTextEl.classList.add('active');
+      // --- ЗАЩИТА СЕРДЕЧКА (НАКОПЛЕНИЕ КАДРОВ) ---
+      if (rawHeartDetected) {
+        heartFramesCount++;
+        if (heartFramesCount >= REQUIRED_FRAMES) {
+          heartTextEl.classList.add('active');
+        }
       } else {
+        heartFramesCount = 0;
         heartTextEl.classList.remove('active');
       }
 
-      // Маска Венома на лицо
-      if (isOKGesture && facePoints) {
-        ctx.fillStyle = '#050505';
-        ctx.beginPath();
-        ctx.moveTo((1 - facePoints[10].x) * w, facePoints[10].y * h);
-        const faceOutlineIndices = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109];
-        
-        for (let idx of faceOutlineIndices) {
-          const pt = facePoints[idx];
-          ctx.lineTo((1 - pt.x) * w, pt.y * h);
+      // --- ЗАЩИТА ЩЕЛЧКА ТАНОСА ---
+      if (rawSnapDetected && !snapCooldown) {
+        snapFramesCount++;
+        if (snapFramesCount >= 3) { // 3 кадра фиксации сжатия пальцев
+          triggerThanosSnap();
+          snapCooldown = true;
+          snapFramesCount = 0;
         }
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.ellipse((1 - facePoints[159].x) * w, facePoints[159].y * h, 18, 8, -0.3, 0, Math.PI * 2);
-        ctx.ellipse((1 - facePoints[386].x) * w, facePoints[386].y * h, 18, 8, 0.3, 0, Math.PI * 2);
-        ctx.fill();
+      } else {
+        if (!rawSnapDetected) {
+          snapFramesCount = 0;
+          snapCooldown = false; // Сброс перезарядки при разжатии пальцев
+        }
       }
     }
 
+    // Инициализация MediaPipe Hands
     const hands = new Hands({ locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
-    hands.setOptions({ maxNumHands: 2, modelComplexity: 0, minDetectionConfidence: 0.6 });
+    hands.setOptions({ maxNumHands: 2, modelComplexity: 0, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
     hands.onResults(onResults);
 
+    // Инициализация MediaPipe Face Mesh (Сетка точек лица)
     const faceMesh = new FaceMesh({ locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
-    faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: false, minDetectionConfidence: 0.5 });
+    faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.6 });
     faceMesh.onResults(res => {
       facePoints = (res.multiFaceLandmarks && res.multiFaceLandmarks.length > 0) ? res.multiFaceLandmarks[0] : null;
     });
@@ -254,7 +241,7 @@
       onFrame: async () => {
         frameCount++;
         await hands.send({ image: video });
-        if (frameCount % 3 === 0) {
+        if (frameCount % 2 === 0) { // Каждые 2 кадра обновляем сетку лица
           await faceMesh.send({ image: video });
         }
       },
