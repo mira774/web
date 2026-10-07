@@ -1,554 +1,206 @@
 <!DOCTYPE html>
-<html lang="ru" class="dark">
+<html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>SYSTEM HUB | Cyberpunk Brawl Esports</title>
-  
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            cyber: { bg: '#08080c', card: '#101018', border: '#1f1f2e', neonBlue: '#00f0ff', neonPink: '#ff0055', neonPurple: '#7000ff' }
-          },
-          boxShadow: {
-            'glow-blue': '0 0 15px rgba(0, 240, 255, 0.4)',
-            'glow-pink': '0 0 15px rgba(255, 0, 85, 0.4)',
-            'glow-purple': '0 0 20px rgba(112, 0, 255, 0.3)',
-          }
-        }
-      }
-    }
-  </script>
-
+  <title>Магия Рук — Интерактивный Сайт</title>
   <style>
-    ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-track { background: #08080c; }
-    ::-webkit-scrollbar-thumb { background: #7000ff; border-radius: 2px; }
-    .cyber-glass { background: rgba(16, 16, 24, 0.9); backdrop-filter: blur(10px); border: 1px solid rgba(112, 0, 255, 0.2); }
-    .cyber-gradient-text { background: linear-gradient(135deg, #00f0ff 0%, #ff0055 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    body { padding-bottom: 30px; }
+    body {
+      margin: 0;
+      background: #090d16;
+      color: #fff;
+      font-family: 'Segoe UI', sans-serif;
+      overflow: hidden;
+    }
+    #webcam {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 200px;
+      height: 150px;
+      border-radius: 12px;
+      transform: scaleX(-1); /* Зеркалим видео */
+      border: 2px solid #38bdf8;
+      z-index: 10;
+    }
+    #canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+    }
+    .info {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 10;
+      pointer-events: none;
+    }
+    h1 { margin: 0 0 5px 0; font-size: 24px; color: #38bdf8; text-shadow: 0 0 10px #38bdf8; }
+    p { margin: 3px 0; color: #94a3b8; font-size: 14px; }
   </style>
+
+  <!-- Подключаем библиотеки MediaPipe Hands -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 </head>
-<body class="bg-cyber-bg text-gray-200 font-sans min-h-screen flex flex-col antialiased">
+<body>
 
-  <!-- ШАПКА -->
-  <header class="sticky top-0 z-50 cyber-glass border-b border-cyber-border px-4 py-3 flex justify-between items-center">
-    <div class="flex items-center gap-2">
-      <div class="w-9 h-9 rounded-lg bg-cyber-neonPurple/20 border border-cyber-neonPurple flex items-center justify-center shadow-glow-purple">
-        <i class="fa-solid fa-bolt text-cyber-neonBlue text-sm"></i>
-      </div>
-      <div>
-        <h1 class="text-sm font-extrabold tracking-wider cyber-gradient-text">SYSTEM // HUB</h1>
-        <p class="text-[10px] text-gray-400">BRAWL STARS ESPORTS</p>
-      </div>
-    </div>
-
-    <div class="flex items-center gap-3">
-      <div class="text-right hidden sm:block">
-        <div id="display-username" class="text-xs font-bold text-white">Гость</div>
-        <div class="text-[10px] text-cyber-neonBlue font-mono">ELO: <span id="display-elo">1000</span></div>
-      </div>
-      <button onclick="openAuthModal()" class="px-3 py-1.5 rounded-md bg-cyber-neonPurple/20 border border-cyber-neonPurple text-cyber-neonBlue text-xs font-semibold flex items-center gap-1.5 shadow-glow-purple">
-        <i class="fa-solid fa-user text-xs"></i>
-        <span>Войти</span>
-      </button>
-    </div>
-  </header>
-
-  <!-- МОБИЛЬНАЯ НАВИГАЦИЯ (Скроллится вбок на телефонах) -->
-  <nav class="flex overflow-x-auto gap-2 p-3 bg-cyber-card border-b border-cyber-border no-scrollbar">
-    <button onclick="switchTab('duels')" id="btn-duels" class="px-4 py-2 rounded-lg text-xs font-bold text-cyber-neonBlue bg-cyber-neonBlue/10 border border-cyber-neonBlue/40 whitespace-nowrap">Дуэли 1v1</button>
-    <button onclick="switchTab('tournaments')" id="btn-tournaments" class="px-4 py-2 rounded-lg text-xs font-bold text-gray-400 whitespace-nowrap">Турниры</button>
-    <button onclick="switchTab('leaderboard')" id="btn-leaderboard" class="px-4 py-2 rounded-lg text-xs font-bold text-gray-400 whitespace-nowrap">Лидерборд</button>
-    <button onclick="switchTab('profile')" id="btn-profile" class="px-4 py-2 rounded-lg text-xs font-bold text-gray-400 whitespace-nowrap">Профиль</button>
-    <button onclick="switchTab('admin')" id="nav-admin" class="hidden px-4 py-2 rounded-lg text-xs font-bold text-cyber-neonPink bg-cyber-neonPink/10 border border-cyber-neonPink/40 whitespace-nowrap">Админка</button>
-  </nav>
-
-  <!-- ОСНОВНОЙ КОНТЕНТ -->
-  <main class="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-4">
-
-    <section class="lg:col-span-8 space-y-4">
-
-      <!-- ВКЛАДКА: ДУЭЛИ -->
-      <div id="tab-duels" class="tab-content space-y-4">
-        <div class="cyber-glass rounded-xl p-4 sm:p-6 relative">
-          <h2 class="text-sm sm:text-lg font-bold text-white mb-1 sm:mb-2 flex items-center gap-2">
-            <i class="fa-solid fa-swords text-cyber-neonPink"></i> БЫСТРАЯ ДУЭЛЬ 1v1
-          </h2>
-          <p class="text-xs sm:text-sm text-gray-400 mb-3">Создай лобби или вступи в открытый матч для поднятия Elo-рейтинга.</p>
-          <button onclick="createMatch()" class="w-full sm:w-auto px-6 py-2.5 sm:py-3 rounded-lg bg-cyber-neonPink text-white font-bold text-xs sm:text-sm hover:bg-pink-600 transition shadow-glow-pink flex items-center justify-center gap-2">
-            <i class="fa-solid fa-circle-plus"></i> Создать Матч
-          </button>
-        </div>
-
-        <div class="cyber-glass rounded-xl p-4 sm:p-6">
-          <h3 class="text-xs sm:text-md font-bold text-gray-300 mb-3 flex justify-between items-center">
-            <span>ОТКРЫТЫЕ ЛОББИ</span>
-            <span class="text-[10px] text-cyber-neonBlue font-mono">Live Queue</span>
-          </h3>
-          <div id="matches-list" class="space-y-2">
-            <div class="text-center text-gray-500 py-4 text-xs">Нет активных лобби</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ВКЛАДКА: ТУРНИРЫ -->
-      <div id="tab-tournaments" class="tab-content hidden space-y-4">
-        <div class="cyber-glass rounded-xl p-4 sm:p-6">
-          <h2 class="text-sm sm:text-lg font-bold text-white mb-2 flex items-center gap-2">
-            <i class="fa-solid fa-trophy text-cyber-neonBlue"></i> СЕЗОННЫЕ ТУРНИРЫ
-          </h2>
-          <p class="text-xs sm:text-sm text-gray-400">Сетки турниров и регистрация команд появятся в ближайшем обновлении.</p>
-        </div>
-      </div>
-
-      <!-- ВКЛАДКА: ЛИДЕРБОРД -->
-      <div id="tab-leaderboard" class="tab-content hidden space-y-4">
-        <div class="cyber-glass rounded-xl p-4 sm:p-6">
-          <h2 class="text-sm sm:text-lg font-bold text-white mb-3 flex items-center gap-2">
-            <i class="fa-solid fa-ranking-star text-cyber-neonPurple"></i> ТОП ИГРОКОВ (ELO LEAGUE)
-          </h2>
-          <div id="leaderboard-list" class="space-y-2">
-            <div class="text-center text-gray-500 py-4 text-xs">Загрузка...</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ВКЛАДКА: ПРОФИЛЬ -->
-      <div id="tab-profile" class="tab-content hidden space-y-4">
-        <div class="cyber-glass rounded-xl p-4 sm:p-6">
-          <h2 class="text-sm sm:text-lg font-bold text-white mb-3 flex items-center gap-2">
-            <i class="fa-solid fa-gear text-cyber-neonBlue"></i> НАСТРОЙКИ ПРОФИЛЯ
-          </h2>
-          <form onsubmit="updateProfile(event)" class="space-y-3 max-w-md">
-            <div>
-              <label class="block text-[11px] text-gray-400 mb-1">Никнейм в системе</label>
-              <input id="profile-username-input" type="text" required class="w-full bg-cyber-card border border-cyber-border rounded-lg px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-cyber-neonBlue">
-            </div>
-            <div>
-              <label class="block text-[11px] text-gray-400 mb-1">Brawl Stars Tag (#TAG)</label>
-              <input id="profile-tag-input" type="text" placeholder="#289L..." required class="w-full bg-cyber-card border border-cyber-border rounded-lg px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-cyber-neonBlue">
-            </div>
-            <button type="submit" class="w-full sm:w-auto px-4 py-2 rounded-lg bg-cyber-neonPurple text-white font-bold text-xs sm:text-sm hover:bg-purple-600 transition shadow-glow-purple">
-              Сохранить данные
-            </button>
-          </form>
-        </div>
-      </div>
-
-      <!-- ВКЛАДКА: АДМИНКА -->
-      <div id="tab-admin" class="tab-content hidden space-y-4">
-        <div class="cyber-glass rounded-xl p-4 sm:p-6 border border-cyber-neonPink/40">
-          <h2 class="text-sm sm:text-lg font-bold text-cyber-neonPink mb-3 flex items-center gap-2">
-            <i class="fa-solid fa-shield-halved"></i> ПАНЕЛЬ АДМИНИСТРАТОРА
-          </h2>
-          <div id="dispute-matches-list" class="space-y-2">
-            <div class="text-center text-gray-500 py-4 text-xs">Нет спорных матчей.</div>
-          </div>
-        </div>
-      </div>
-
-    </section>
-
-    <!-- ЧАТ (Адаптирован под телефоны и ПК) -->
-    <aside class="lg:col-span-4 flex flex-col">
-      <div class="cyber-glass rounded-xl p-3 sm:p-4 flex-1 flex flex-col h-[380px] lg:h-[500px]">
-        <div class="flex items-center justify-between pb-2 border-b border-cyber-border mb-2">
-          <div class="flex items-center gap-2">
-            <i class="fa-solid fa-comments text-cyber-neonBlue text-xs"></i>
-            <span class="font-bold text-white text-xs sm:text-sm">CYBER CHAT</span>
-          </div>
-          <span class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e]"></span>
-        </div>
-
-        <div id="chat-messages" class="flex-1 overflow-y-auto space-y-2 pr-1 text-xs">
-          <div class="text-center text-[11px] text-gray-500 my-2">-- Войдите, чтобы писать в чат --</div>
-        </div>
-
-        <form onsubmit="sendChatMessage(event)" class="mt-2 space-y-2">
-          <div id="media-preview" class="hidden p-1.5 rounded-lg bg-cyber-card border border-cyber-border flex items-center justify-between text-[11px] text-cyber-neonBlue">
-            <span id="media-preview-name">Файл выбран...</span>
-            <button type="button" onclick="clearMediaPreview()" class="text-cyber-neonPink font-bold px-1">✕</button>
-          </div>
-
-          <div class="flex gap-1.5 items-center">
-            <label class="p-2 rounded-lg bg-cyber-card border border-cyber-border text-gray-400 hover:text-cyber-neonBlue cursor-pointer transition">
-              <i class="fa-solid fa-paperclip text-xs"></i>
-              <input type="file" id="chat-file-input" accept="image/*,video/*" onchange="handleFileSelect(event)" class="hidden">
-            </label>
-
-            <button type="button" id="voice-record-btn" onclick="toggleVoiceRecord()" class="p-2 rounded-lg bg-cyber-card border border-cyber-border text-gray-400 hover:text-cyber-neonPink transition">
-              <i class="fa-solid fa-microphone text-xs"></i>
-            </button>
-
-            <input id="chat-input" type="text" placeholder="Сообщение..." class="flex-1 bg-cyber-card border border-cyber-border rounded-lg px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-cyber-neonBlue">
-
-            <button type="submit" class="p-2.5 rounded-lg bg-cyber-neonPurple text-white hover:bg-purple-600 transition shadow-glow-purple">
-              <i class="fa-solid fa-paper-plane text-xs"></i>
-            </button>
-          </div>
-        </form>
-      </div>
-    </aside>
-
-  </main>
-
-  <!-- МОДАЛЬНЫЕ ОКНА -->
-  <div id="auth-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="cyber-glass rounded-xl p-5 max-w-sm w-full border border-cyber-neonPurple shadow-glow-purple">
-      <h3 class="text-md font-bold text-white mb-1">Вход / Регистрация</h3>
-      <p class="text-[11px] text-gray-400 mb-3">Введите почту и пароль. Если аккаунта нет — он создастся автоматически!</p>
-      <form onsubmit="handleAuth(event)" class="space-y-3">
-        <div>
-          <label class="block text-[11px] text-gray-400 mb-1">Email</label>
-          <input id="auth-email" type="email" required class="w-full bg-cyber-card border border-cyber-border rounded-lg px-3 py-2 text-xs sm:text-sm text-white focus:outline-none">
-        </div>
-        <div>
-          <label class="block text-[11px] text-gray-400 mb-1">Пароль</label>
-          <input id="auth-password" type="password" required class="w-full bg-cyber-card border border-cyber-border rounded-lg px-3 py-2 text-xs sm:text-sm text-white focus:outline-none">
-        </div>
-        <div class="flex gap-2 pt-1">
-          <button type="submit" class="flex-1 py-2 rounded-lg bg-cyber-neonBlue text-black font-bold text-xs sm:text-sm hover:bg-cyan-400">Продолжить</button>
-          <button type="button" onclick="closeAuthModal()" class="px-4 py-2 rounded-lg bg-cyber-card border border-cyber-border text-gray-400 text-xs sm:text-sm">Отмена</button>
-        </div>
-      </form>
-    </div>
+  <div class="info">
+    <h1>🪄 Колдовство Руками</h1>
+    <p>1. Подвигай указательным пальцем — за ним летит неоновая магия.</p>
+    <p>2. Соедини большой и указательный палец (щепоть) — создастся 🟦 **Квадрат**.</p>
+    <p>3. Выпрями ✌️ 2 пальца (указательный + средний) — создастся 🔺 **Треугольник**.</p>
   </div>
 
-  <div id="pin-modal" class="hidden fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
-    <div class="cyber-glass rounded-xl p-5 max-w-sm w-full border border-cyber-neonPink shadow-glow-pink">
-      <h3 class="text-md font-bold text-cyber-neonPink mb-1 flex items-center gap-2"><i class="fa-solid fa-lock"></i> СЕКРЕТНЫЙ ДОСТУП</h3>
-      <p class="text-[11px] text-gray-400 mb-3">Введите Мастер-PIN для активации прав администратора.</p>
-      <form onsubmit="submitMasterPin(event)" class="space-y-3">
-        <input id="master-pin-input" type="password" placeholder="PIN-код..." required class="w-full bg-cyber-card border border-cyber-neonPink/50 rounded-lg px-3 py-2 text-xs sm:text-sm text-white text-center tracking-widest focus:outline-none">
-        <button type="submit" class="w-full py-2 rounded-lg bg-cyber-neonPink text-white font-bold text-xs sm:text-sm hover:bg-pink-600 transition shadow-glow-pink">Подтвердить</button>
-      </form>
-    </div>
-  </div>
+  <video id="webcam" autoplay playsinline></video>
+  <canvas id="canvas"></canvas>
 
-  <!-- JS СКРИПТЫ -->
   <script>
-    const SUPABASE_URL = 'https://wluynpuetzniyijwpglq.supabase.co';
-    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndsdXlucHVldHpuaXlpandwZ2xxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NDI0MjgsImV4cCI6MjEwMTUxODQyOH0.qBXdq59sRvLrduS1OgGHTyxgaQK1usE5Artfr_VG1f8';
-    
-    let db = null;
-    let currentUser = null;
-    let currentProfile = null;
-    let selectedMediaFile = null;
-    let mediaRecorder = null;
-    let audioChunks = [];
-    let isRecording = false;
+    const videoElement = document.getElementById('webcam');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
 
-    function switchTab(tabName) {
-      document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
-      const activeTab = document.getElementById(`tab-${tabName}`);
-      if (activeTab) activeTab.classList.remove('hidden');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
 
-      ['duels', 'tournaments', 'leaderboard', 'profile', 'admin'].forEach(name => {
-        const btn = document.getElementById(`btn-${name}`);
-        if (btn) {
-          if (name === tabName) {
-            btn.className = "px-4 py-2 rounded-lg text-xs font-bold text-cyber-neonBlue bg-cyber-neonBlue/10 border border-cyber-neonBlue/40 whitespace-nowrap";
-          } else {
-            btn.className = "px-4 py-2 rounded-lg text-xs font-bold text-gray-400 whitespace-nowrap hover:text-white";
-          }
-        }
+    const shapes = []; // Хранилище созданных фигур
+    const particles = []; // Искры за пальцем
+
+    // Обработка кадров нейросетью MediaPipe
+    function onResults(results) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Отрисовка сохраненных фигур
+      shapes.forEach(shape => shape.draw());
+
+      // Отрисовка магии/частиц
+      particles.forEach((p, index) => {
+        p.update();
+        p.draw();
+        if (p.life <= 0) particles.splice(index, 1);
       });
+
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        const landmarks = results.multiHandLandmarks[0];
+
+        // Координаты указательного пальца (точка №8) и большого (№4)
+        // Зеркалим по X, чтобы движение совпадало с экраном
+        const indexTip = {
+          x: (1 - landmarks[8].x) * canvas.width,
+          y: landmarks[8].y * canvas.height
+        };
+        const thumbTip = {
+          x: (1 - landmarks[4].x) * canvas.width,
+          y: landmarks[4].y * canvas.height
+        };
+        const middleTip = {
+          x: (1 - landmarks[12].x) * canvas.width,
+          y: landmarks[12].y * canvas.height
+        };
+
+        // Создаем неоновые искры за указательным пальцем
+        for (let i = 0; i < 3; i++) {
+          particles.push(new Particle(indexTip.x, indexTip.y));
+        }
+
+        // 1. ЖЕСТ 1: Щепоть (Большой + Указательный палец близко)
+        const distancePinch = Math.hypot(indexTip.x - thumbTip.x, indexTip.y - thumbTip.y);
+        if (distancePinch < 40) {
+          shapes.push(new Shape(indexTip.x, indexTip.y, 'square'));
+        }
+
+        // 2. ЖЕСТ 2: Виктори / 2 пальца близко друг к другу
+        const distancePeace = Math.hypot(indexTip.x - middleTip.x, indexTip.y - middleTip.y);
+        if (distancePeace < 45 && indexTip.y < landmarks[6].y * canvas.height) {
+          shapes.push(new Shape(indexTip.x, indexTip.y, 'triangle'));
+        }
+
+        // Отрисовка курсора на кончике пальца
+        ctx.fillStyle = '#ff007f';
+        ctx.beginPath();
+        ctx.arc(indexTip.x, indexTip.y, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#ff007f';
+      }
     }
 
-    function openAuthModal() { document.getElementById('auth-modal').classList.remove('hidden'); }
-    function closeAuthModal() { document.getElementById('auth-modal').classList.add('hidden'); }
-
-    window.addEventListener('DOMContentLoaded', async () => {
-      try {
-        if (window.supabase) {
-          db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-          await checkUserSession();
-          loadLeaderboard();
-          loadMatches();
-          initChatRealtime();
-        }
-      } catch (err) {
-        console.error("Ошибка инициализации:", err);
+    // Класс магических частиц
+    class Particle {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.vx = (Math.random() - 0.5) * 4;
+        this.vy = (Math.random() - 0.5) * 4;
+        this.life = 1;
+        this.color = `hsl(${Math.random() * 60 + 180}, 100%, 60%)`;
       }
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.life -= 0.03;
+      }
+      draw() {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.life);
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // Класс геометрии (Квадраты и Треугольники)
+    class Shape {
+      constructor(x, y, type) {
+        this.x = x;
+        this.y = y;
+        this.type = type;
+        this.size = Math.random() * 30 + 30;
+        this.color = type === 'square' ? '#38bdf8' : '#a855f7';
+      }
+      draw() {
+        ctx.fillStyle = this.color;
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = this.color;
+        ctx.beginPath();
+        if (this.type === 'square') {
+          ctx.fillRect(this.x - this.size / 2, this.y - this.size / 2, this.size, this.size);
+        } else if (this.type === 'triangle') {
+          ctx.moveTo(this.x, this.y - this.size);
+          ctx.lineTo(this.x - this.size, this.y + this.size);
+          ctx.lineTo(this.x + this.size, this.y + this.size);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+    }
+
+    // Инициализация MediaPipe Hands
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
     });
 
-    async function checkUserSession() {
-      if (!db) return;
-      const { data: { session } } = await db.auth.getSession();
-      if (session) {
-        currentUser = session.user;
-        await fetchProfile();
-      }
-    }
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.7
+    });
 
-    async function fetchProfile() {
-      if (!currentUser || !db) return;
-      
-      let { data } = await db.from('profiles').select('*').eq('id', currentUser.id).single();
-      
-      if (!data) {
-        const defaultName = 'Player_' + Math.floor(Math.random() * 9000 + 1000);
-        const { data: newProf } = await db.from('profiles').insert({
-          id: currentUser.id,
-          username: defaultName,
-          brawl_tag: '#TAG'
-        }).select().single();
-        data = newProf;
-      }
+    hands.onResults(onResults);
 
-      if (data) {
-        currentProfile = data;
-        document.getElementById('display-username').innerText = data.username;
-        document.getElementById('display-elo').innerText = data.elo || 1000;
-        document.getElementById('profile-username-input').value = data.username;
-        document.getElementById('profile-tag-input').value = data.brawl_tag;
-
-        if (data.role === 'admin') {
-          const navAdmin = document.getElementById('nav-admin');
-          if (navAdmin) navAdmin.classList.remove('hidden');
-        }
-      }
-    }
-
-    async function handleAuth(e) {
-      e.preventDefault();
-      if (!db) return;
-      const email = document.getElementById('auth-email').value;
-      const password = document.getElementById('auth-password').value;
-
-      let { data, error } = await db.auth.signInWithPassword({ email, password });
-      
-      if (error) {
-        const reg = await db.auth.signUp({ email, password });
-        if (reg.error) {
-          alert('Ошибка: ' + reg.error.message);
-          return;
-        }
-        data = reg.data;
-      }
-
-      if (data?.user) {
-        currentUser = data.user;
-        await fetchProfile();
-        closeAuthModal();
-      }
-    }
-
-    async function updateProfile(e) {
-      e.preventDefault();
-      if (!db || !currentUser) return openAuthModal();
-      const username = document.getElementById('profile-username-input').value;
-      const tag = document.getElementById('profile-tag-input').value;
-
-      const { data } = await db.rpc('verify_admin_trigger', { p_user_id: currentUser.id, p_trigger_code: username });
-
-      if (data?.step === 2) {
-        document.getElementById('pin-modal').classList.remove('hidden');
-        return;
-      }
-
-      await db.from('profiles').update({ username, brawl_tag: tag }).eq('id', currentUser.id);
-      await fetchProfile();
-      alert('Профиль обновлен!');
-    }
-
-    async function submitMasterPin(e) {
-      e.preventDefault();
-      if (!db) return;
-      const pin = document.getElementById('master-pin-input').value;
-
-      const { data } = await db.rpc('verify_admin_trigger', {
-        p_user_id: currentUser.id,
-        p_trigger_code: '//sys_override',
-        p_master_pin: pin
-      });
-
-      if (data?.step === 'completed') {
-        alert('Права Администратора получены!');
-        document.getElementById('pin-modal').classList.add('hidden');
-        await fetchProfile();
-      } else {
-        alert('Ошибка доступа.');
-      }
-    }
-
-    function handleFileSelect(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-      selectedMediaFile = file;
-      document.getElementById('media-preview-name').innerText = `Файл: ${file.name}`;
-      document.getElementById('media-preview').classList.remove('hidden');
-    }
-
-    function clearMediaPreview() {
-      selectedMediaFile = null;
-      document.getElementById('chat-file-input').value = '';
-      document.getElementById('media-preview').classList.add('hidden');
-    }
-
-    async function toggleVoiceRecord() {
-      const btn = document.getElementById('voice-record-btn');
-      if (!isRecording) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          mediaRecorder = new MediaRecorder(stream);
-          audioChunks = [];
-          mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-          mediaRecorder.onstop = () => {
-            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-            selectedMediaFile = new File([audioBlob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
-            document.getElementById('media-preview-name').innerText = '🎤 Голосовое записано';
-            document.getElementById('media-preview').classList.remove('hidden');
-          };
-          mediaRecorder.start();
-          isRecording = true;
-          btn.classList.add('text-cyber-neonPink', 'animate-pulse');
-        } catch (err) { alert('Нет доступа к микрофону!'); }
-      } else {
-        mediaRecorder.stop();
-        isRecording = false;
-        btn.classList.remove('text-cyber-neonPink', 'animate-pulse');
-      }
-    }
-
-    async function initChatRealtime() {
-      if (!db) return;
-      const { data: messages } = await db.from('global_chat').select('*').order('created_at', { ascending: true }).limit(30);
-      if (messages) renderMessages(messages);
-
-      db.channel('public:global_chat')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'global_chat' }, payload => {
-          appendMessage(payload.new);
-        })
-        .subscribe();
-    }
-
-    function renderMediaElement(m) {
-      if (!m.media_url) return '';
-      if (m.media_type === 'image') return `<img src="${m.media_url}" class="mt-1.5 rounded-lg max-h-36 border border-cyber-border cursor-pointer" onclick="window.open('${m.media_url}')">`;
-      if (m.media_type === 'video') return `<video src="${m.media_url}" controls class="mt-1.5 rounded-lg max-h-36 w-full border border-cyber-border"></video>`;
-      if (m.media_type === 'audio') return `<audio src="${m.media_url}" controls class="mt-1.5 w-full h-7 rounded"></audio>`;
-      return '';
-    }
-
-    function renderMessages(msgs) {
-      const chatBox = document.getElementById('chat-messages');
-      if (!msgs || msgs.length === 0) {
-        chatBox.innerHTML = '<div class="text-center text-[11px] text-gray-500 my-2">-- Чат пуст --</div>';
-        return;
-      }
-      chatBox.innerHTML = msgs.map(m => `
-        <div class="p-2 rounded bg-cyber-card/60 border border-cyber-border/40">
-          <span class="text-[11px] font-bold text-cyber-neonBlue">${m.username}:</span>
-          <span class="text-[11px] text-gray-300 ml-1">${m.message}</span>
-          ${renderMediaElement(m)}
-        </div>
-      `).join('');
-      chatBox.scrollTop = chatBox.scrollHeight;
-    }
-
-    function appendMessage(m) {
-      const chatBox = document.getElementById('chat-messages');
-      chatBox.innerHTML += `
-        <div class="p-2 rounded bg-cyber-card/60 border border-cyber-border/40">
-          <span class="text-[11px] font-bold text-cyber-neonBlue">${m.username}:</span>
-          <span class="text-[11px] text-gray-300 ml-1">${m.message}</span>
-          ${renderMediaElement(m)}
-        </div>
-      `;
-      chatBox.scrollTop = chatBox.scrollHeight;
-    }
-
-    async function sendChatMessage(e) {
-      e.preventDefault();
-      if (!currentProfile) return openAuthModal();
-
-      const input = document.getElementById('chat-input');
-      const messageText = input.value.trim();
-      if (!messageText && !selectedMediaFile) return;
-
-      let mediaUrl = null;
-      let mediaType = 'text';
-
-      if (selectedMediaFile) {
-        const fileExt = selectedMediaFile.name.split('.').pop();
-        const filePath = `chat/${Date.now()}_${currentUser.id}.${fileExt}`;
-
-        const { data, error } = await db.storage.from('chat-media').upload(filePath, selectedMediaFile);
-        if (!error) {
-          const { data: urlData } = db.storage.from('chat-media').getPublicUrl(filePath);
-          mediaUrl = urlData.publicUrl;
-          if (selectedMediaFile.type.startsWith('image/')) mediaType = 'image';
-          else if (selectedMediaFile.type.startsWith('video/')) mediaType = 'video';
-          else if (selectedMediaFile.type.startsWith('audio/')) mediaType = 'audio';
-        }
-      }
-
-      await db.from('global_chat').insert({
-        user_id: currentUser.id,
-        username: currentProfile.username,
-        message: messageText || (mediaType === 'audio' ? '🎤 Голосовое сообщение' : '📎 Медиафайл'),
-        media_url: mediaUrl,
-        media_type: mediaType
-      });
-
-      input.value = '';
-      clearMediaPreview();
-    }
-
-    async function loadLeaderboard() {
-      if (!db) return;
-      const { data } = await db.from('profiles').select('username, elo, brawl_tag').order('elo', { ascending: false }).limit(10);
-      if (data && data.length > 0) {
-        document.getElementById('leaderboard-list').innerHTML = data.map((item, index) => `
-          <div class="p-2.5 rounded-lg bg-cyber-card border border-cyber-border flex justify-between items-center text-xs">
-            <span class="font-bold text-white">#${index + 1} ${item.username} (${item.brawl_tag})</span>
-            <span class="font-mono text-cyber-neonBlue font-bold">${item.elo || 1000} ELO</span>
-          </div>
-        `).join('');
-      }
-    }
-
-    async function createMatch() {
-      if (!currentProfile) return openAuthModal();
-      await db.from('matches').insert({ player1_id: currentUser.id, player1_tag: currentProfile.brawl_tag });
-      loadMatches();
-    }
-
-    async function loadMatches() {
-      if (!db) return;
-      const { data } = await db.from('matches').select('*').eq('status', 'waiting');
-      if (data && data.length > 0) {
-        document.getElementById('matches-list').innerHTML = data.map(m => `
-          <div class="p-3 rounded-lg bg-cyber-card border border-cyber-border flex justify-between items-center text-xs">
-            <div>
-              <div class="font-semibold text-white">Лобби от ${m.player1_tag}</div>
-              <div class="text-[10px] text-gray-400">Формат: 1v1 | Статус: Ожидание</div>
-            </div>
-            <button onclick="joinMatch('${m.id}')" class="px-3 py-1.5 rounded bg-cyber-neonBlue/20 border border-cyber-neonBlue text-cyber-neonBlue font-bold hover:bg-cyber-neonBlue hover:text-black">
-              Вступить
-            </button>
-          </div>
-        `).join('');
-      } else {
-        document.getElementById('matches-list').innerHTML = '<div class="text-center text-gray-500 py-4 text-xs">Нет активных лобби</div>';
-      }
-    }
-
-    async function joinMatch(matchId) {
-      if (!currentProfile) return openAuthModal();
-      await db.from('matches').update({ player2_id: currentUser.id, player2_tag: currentProfile.brawl_tag, status: 'active' }).eq('id', matchId);
-      alert('Вы вступили в матч!');
-      loadMatches();
-    }
+    // Запуск веб-камеры
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await hands.send({ image: videoElement });
+      },
+      width: 640,
+      height: 480
+    });
+    camera.start();
   </script>
 </body>
 </html>
