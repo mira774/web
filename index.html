@@ -18,16 +18,18 @@
   }
   
   #start {
-    position: fixed; inset: 0; z-index: 10; display: flex;
-    align-items: center; justify-content: center; background: rgba(5,10,15,0.92);
+    position: fixed; inset: 0; z-index: 999; display: flex;
+    align-items: center; justify-content: center; background: rgba(5,10,15,0.95);
     color: #00e5ff; text-align: center; padding: 20px;
   }
   .btn {
-    font-size: 18px; font-weight: bold; padding: 16px 36px; border-radius: 50px;
+    font-size: 18px; font-weight: bold; padding: 18px 40px; border-radius: 50px;
     background: #00e5ff; color: #000; border: none; cursor: pointer;
-    box-shadow: 0 0 20px #00e5ff; margin-top: 20px; transition: transform 0.2s;
+    box-shadow: 0 0 25px #00e5ff; margin-top: 20px;
+    user-select: none; -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
   }
-  .btn:active { transform: scale(0.95); }
+  .btn:active { transform: scale(0.94); background: #70f0ff; }
   
   #status-msg {
     margin-top: 15px; font-size: 14px; color: #ff8a7a; min-height: 20px; max-width: 320px;
@@ -35,7 +37,7 @@
 
   .hint {
     position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-    z-index: 5; background: rgba(0,0,0,0.7); color: #00e5ff; padding: 10px 20px;
+    z-index: 5; background: rgba(0,0,0,0.8); color: #00e5ff; padding: 10px 20px;
     border-radius: 20px; border: 1px solid #00e5ff; font-size: 13px; text-align: center;
     pointer-events: none;
   }
@@ -54,7 +56,7 @@
   <div>
     <h1>NANO PARTICLE SUIT 3D</h1>
     <p style="color:#aaa; margin-top:8px;">Объёмный костюм из 2500+ силовых частиц</p>
-    <button class="btn" id="startBtn">ВКЛЮЧИТЬ КОСТЮМ</button>
+    <button class="btn" id="startBtn" type="button">ВКЛЮЧИТЬ КОСТЮМ</button>
     <div id="status-msg"></div>
   </div>
 </div>
@@ -190,28 +192,31 @@ function updateBodyParticles(landmarks) {
   posAttr.needsUpdate = true;
 }
 
-// --- 4. MEDIAPIPE POSE (Загрузка с серверов Google) ---
+// --- 4. MEDIAPIPE POSE ---
 let pose = null;
-try {
-  pose = new Pose({
-    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
-  });
+function initPose() {
+  if (pose) return;
+  try {
+    pose = new Pose({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+    });
 
-  pose.setOptions({
-    modelComplexity: 0,
-    smoothLandmarks: true,
-    minDetectionConfidence: 0.5,
-    minTrackingConfidence: 0.5
-  });
+    pose.setOptions({
+      modelComplexity: 0,
+      smoothLandmarks: true,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
 
-  pose.onResults((results) => {
-    if (results.poseLandmarks) {
-      updateBodyParticles(results.poseLandmarks);
-      hudHint.textContent = '✨ Костюм активен!';
-    }
-  });
-} catch (e) {
-  console.error("Ошибка создания Pose:", e);
+    pose.onResults((results) => {
+      if (results.poseLandmarks) {
+        updateBodyParticles(results.poseLandmarks);
+        hudHint.textContent = '✨ Костюм активен!';
+      }
+    });
+  } catch (e) {
+    console.error("Ошибка инициализации Pose:", e);
+  }
 }
 
 function animate() {
@@ -221,11 +226,19 @@ function animate() {
 }
 animate();
 
-// --- 5. МГНОВЕННЫЙ ЗАПУСК ---
-async function startCamera() {
-  startBtn.disabled = true;
+// --- 5. ОБРАБОТЧИК КНОПКИ ---
+let isStarted = false;
+
+async function handleStart(e) {
+  if (e) e.preventDefault();
+  if (isStarted) return;
+  isStarted = true;
+
+  startBtn.textContent = "ЗАПУСК...";
   statusMsg.style.color = '#00e5ff';
-  statusMsg.textContent = 'Запуск камеры...';
+  statusMsg.textContent = 'Подключение к камере...';
+
+  initPose();
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -236,11 +249,9 @@ async function startCamera() {
     video.srcObject = stream;
     await video.play();
 
-    // Мгновенно скрываем меню, не ожидая ответа нейросети
     startScreen.style.display = 'none';
-    hudHint.textContent = '⏳ Загрузка модели нейросети...';
+    hudHint.textContent = '⏳ Подойдите к камере...';
 
-    // Фоновый цикл распознавания
     let isProcessing = false;
     async function processVideo() {
       if (video.readyState >= 2 && pose && !isProcessing) {
@@ -248,7 +259,7 @@ async function startCamera() {
         try {
           await pose.send({ image: video });
         } catch (err) {
-          console.warn("Сбой кадра Pose:", err);
+          console.warn("Ошибка обработки кадра:", err);
         }
         isProcessing = false;
       }
@@ -258,13 +269,15 @@ async function startCamera() {
 
   } catch (err) {
     console.error(err);
-    startBtn.disabled = false;
+    isStarted = false;
+    startBtn.textContent = "ПОВТОРИТЬ";
     statusMsg.style.color = '#ff8a7a';
     statusMsg.textContent = 'Ошибка доступа к камере: ' + (err.message || err.name);
   }
 }
 
-startBtn.addEventListener('click', startCamera);
+startBtn.addEventListener('click', handleStart);
+startBtn.addEventListener('touchstart', handleStart, { passive: false });
 </script>
 </body>
 </html>
