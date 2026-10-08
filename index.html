@@ -2,37 +2,47 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Spatial Video Chat 2D</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Spatial Mobile Video & Audio Chat</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { width: 100vw; height: 100vh; overflow: hidden; background: #111; font-family: system-ui, sans-serif; color: #fff; }
+  body { width: 100vw; height: 100vh; overflow: hidden; background: #000; font-family: system-ui, sans-serif; color: #fff; user-select: none; }
 
-  #viewport { position: relative; width: 100%; height: 100%; overflow: hidden; }
-  canvas { display: block; }
+  #viewport { position: relative; width: 100%; height: 100%; touch-action: none; }
+  canvas { display: block; width: 100%; height: 100%; }
 
-  /* UI Панель */
   #ui {
-    position: fixed; top: 15px; left: 15px; z-index: 10;
-    background: rgba(0,0,0,0.8); padding: 12px 18px; border-radius: 12px;
-    border: 1px solid #333; display: flex; gap: 12px; align-items: center;
+    position: fixed; top: 12px; left: 12px; right: 12px; z-index: 10;
+    background: rgba(10, 15, 25, 0.88); padding: 12px 16px; border-radius: 16px;
+    border: 1px solid rgba(0, 229, 255, 0.4); display: flex; flex-direction: column; gap: 8px;
+    backdrop-filter: blur(10px); box-shadow: 0 4px 20px rgba(0,0,0,0.8);
   }
+  
+  .row { display: flex; gap: 10px; align-items: center; justify-content: space-between; font-size: 13px; }
+  
+  input[type="text"] {
+    background: #111; border: 1px solid #333; color: #fff; padding: 8px 12px;
+    border-radius: 8px; font-size: 13px; flex: 1; outline: none;
+  }
+  
+  input[type="range"] { flex: 1; accent-color: #00e5ff; cursor: pointer; }
   
   .btn {
-    background: #00e5ff; color: #000; border: none; padding: 8px 16px;
-    font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 13px;
+    background: #00e5ff; color: #000; border: none; padding: 8px 14px;
+    font-weight: bold; border-radius: 8px; cursor: pointer; font-size: 13px;
+    white-space: nowrap; -webkit-tap-highlight-color: transparent;
   }
-  .btn:hover { background: #70f0ff; }
+  .btn:active { transform: scale(0.96); background: #70f0ff; }
   
-  file-input { display: none; }
-  #status { font-size: 12px; color: #aaa; }
+  #my-id { color: #00e5ff; font-weight: bold; user-select: all; }
+  #status { font-size: 12px; color: #aaa; text-align: center; }
 
-  /* Скрытое видео с камеры */
   #webcam { display: none; }
 </style>
 
-<!-- MediaPipe Selfie Segmentation -->
+<!-- MediaPipe Selfie Segmentation + PeerJS -->
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
 
@@ -41,9 +51,23 @@
 </div>
 
 <div id="ui">
-  <button class="btn" onclick="document.getElementById('bgLoader').click()">🖼️ Сменить фон</button>
-  <input type="file" id="bgLoader" accept="image/*" style="display:none">
-  <span id="status">Управление: WASD / Стрелочки</span>
+  <div class="row">
+    <span>Мой ID: <span id="my-id">...</span></span>
+    <button class="btn" onclick="document.getElementById('bgLoader').click()">🖼️ Сменить фон</button>
+    <input type="file" id="bgLoader" accept="image/*" style="display:none">
+  </div>
+  
+  <div class="row">
+    <input type="text" id="peer-id-input" placeholder="ID друга">
+    <button class="btn" id="connect-btn">Войти и говорить</button>
+  </div>
+
+  <div class="row">
+    <label style="min-width: 80px;">Размер:</label>
+    <input type="range" id="sizeSlider" min="100" max="400" value="200">
+  </div>
+  
+  <div id="status">🎤 Разрешите микрофон при запросе</div>
 </div>
 
 <video id="webcam" autoplay playsinline muted></video>
@@ -54,6 +78,10 @@ const ctx = canvas.getContext('2d');
 const webcam = document.getElementById('webcam');
 const bgLoader = document.getElementById('bgLoader');
 const status = document.getElementById('status');
+const myIdEl = document.getElementById('my-id');
+const peerInput = document.getElementById('peer-id-input');
+const connectBtn = document.getElementById('connect-btn');
+const sizeSlider = document.getElementById('sizeSlider');
 
 let W = window.innerWidth, H = window.innerHeight;
 canvas.width = W; canvas.height = H;
@@ -63,131 +91,231 @@ window.addEventListener('resize', () => {
   canvas.width = W; canvas.height = H;
 });
 
-// --- 1. КАРТА И ЗАДНИЙ ФОН ---
+// --- 1. ФОН ---
 let bgImage = new Image();
-// Дефолтный сетчатый фон
 let hasCustomBg = false;
 
 bgLoader.addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (file) {
     const reader = new FileReader();
-    reader.onload = (event) => {
-      bgImage.src = event.target.result;
-      hasCustomBg = true;
-      status.textContent = "Фон успешно обновлён!";
-    };
+    reader.onload = (ev) => { bgImage.src = ev.target.result; hasCustomBg = true; };
     reader.readAsDataURL(file);
   }
 });
 
-// --- 2. ИГРОК И ПЕРЕМЕЩЕНИЕ ---
-const player = {
-  x: W / 2,
-  y: H / 2,
-  radius: 45,
-  speed: 4,
-  vx: 0,
-  vy: 0
-};
+// --- 2. ИГРОК ---
+const myPlayer = { x: W / 2, y: H / 2, height: parseInt(sizeSlider.value) };
+const remotePlayers = {}; // Хранилище подключенных друзей
+let localStream = null;
 
-const keys = {};
-window.addEventListener('keydown', (e) => keys[e.code] = true);
-window.addEventListener('keyup', (e) => keys[e.code] = false);
+sizeSlider.addEventListener('input', (e) => {
+  myPlayer.height = parseInt(e.target.value);
+  sendPosition();
+});
 
-function handleInput() {
-  player.vx = 0; player.vy = 0;
-  if (keys['KeyW'] || keys['ArrowUp']) player.vy = -player.speed;
-  if (keys['KeyS'] || keys['ArrowDown']) player.vy = player.speed;
-  if (keys['KeyA'] || keys['ArrowLeft']) player.vx = -player.speed;
-  if (keys['KeyD'] || keys['ArrowRight']) player.vx = player.speed;
-
-  player.x = Math.max(player.radius, Math.min(W - player.radius, player.x + player.vx));
-  player.y = Math.max(player.radius, Math.min(H - player.radius, player.y + player.vy));
+function movePlayerTo(cx, cy) {
+  myPlayer.x = cx;
+  myPlayer.y = cy;
+  sendPosition();
 }
 
-// --- 3. ВЫРЕЗАНИЕ ФОНА С КАМЕРЫ ---
-const segCanvas = document.createElement('canvas');
-segCanvas.width = 160; segCanvas.height = 160;
-const segCtx = segCanvas.getContext('2d');
+function sendPosition() {
+  if (dataConnection) {
+    dataConnection.send({ type: 'pos', x: myPlayer.x, y: myPlayer.y, height: myPlayer.height });
+  }
+}
 
+let isDragging = false;
+canvas.addEventListener('pointerdown', (e) => { isDragging = true; movePlayerTo(e.clientX, e.clientY); });
+canvas.addEventListener('pointermove', (e) => { if (isDragging) movePlayerTo(e.clientX, e.clientY); });
+window.addEventListener('pointerup', () => isDragging = false);
+
+// --- 3. ВЫРЕЗАНИЕ СИЛУЭТА (MediaPipe) ---
+const segCanvas = document.createElement('canvas');
+segCanvas.width = 320; segCanvas.height = 320;
+const segCtx = segCanvas.getContext('2d');
 let isSegmentationReady = false;
 
 const selfieSegmentation = new SelfieSegmentation({
-  locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
+  locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}`
 });
-
 selfieSegmentation.setOptions({ modelSelection: 1 });
 
 selfieSegmentation.onResults((results) => {
   segCtx.save();
-  segCtx.clearRect(0, 0, 160, 160);
-  
-  // Рисуем маску сегментации (силуэт человека)
-  segCtx.drawImage(results.segmentationMask, 0, 0, 160, 160);
-  
-  // Вырезаем силуэт
+  segCtx.clearRect(0, 0, 320, 320);
+  segCtx.drawImage(results.segmentationMask, 0, 0, 320, 320);
   segCtx.globalCompositeOperation = 'source-in';
-  segCtx.drawImage(results.image, 0, 0, 160, 160);
+  segCtx.translate(320, 0);
+  segCtx.scale(-1, 1);
+  segCtx.drawImage(results.image, 0, 0, 320, 320);
   
+  // Мягкий градиентный срез снизу
+  segCtx.globalCompositeOperation = 'destination-out';
+  const grad = segCtx.createLinearGradient(0, 240, 0, 320);
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(0,0,0,1)');
+  segCtx.fillStyle = grad;
+  segCtx.fillRect(0, 240, 320, 80);
+
   segCtx.restore();
   isSegmentationReady = true;
 });
 
-// --- 4. РЕНДЕР СЦЕНЫ ---
-function drawGrid() {
-  ctx.strokeStyle = '#222';
-  ctx.lineWidth = 1;
-  const gridSize = 40;
-  for (let x = 0; x < W; x += gridSize) {
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+// --- 4. PEERJS: ДАННЫЕ + ГОЛОСОВОЙ ЗВОНОК ---
+const peer = new Peer();
+let dataConnection = null;
+
+peer.on('open', (id) => { 
+  myIdEl.textContent = id; 
+  status.textContent = "Передайте ID другу для подключения"; 
+});
+
+// Прием входящего дата-канала и аудиозвонка
+peer.on('connection', (conn) => setupDataConnection(conn));
+
+peer.on('call', (call) => {
+  if (localStream) {
+    call.answer(localStream); // Отвечаем своим аудиопотоком
+    call.on('stream', (remoteAudioStream) => {
+      attachRemoteAudio(call.peer, remoteAudioStream);
+    });
   }
-  for (let y = 0; y < H; y += gridSize) {
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+});
+
+connectBtn.addEventListener('click', () => {
+  const targetId = peerInput.value.trim();
+  if (targetId) {
+    setupDataConnection(peer.connect(targetId));
+    
+    // Инициация аудиозвонка другу
+    if (localStream) {
+      const call = peer.call(targetId, localStream);
+      call.on('stream', (remoteAudioStream) => {
+        attachRemoteAudio(targetId, remoteAudioStream);
+      });
+    }
   }
+});
+
+function setupDataConnection(conn) {
+  dataConnection = conn;
+  status.textContent = "🤝 Подключено! Говорите в микрофон";
+
+  if (!remotePlayers[conn.peer]) {
+    remotePlayers[conn.peer] = { x: W / 2, y: H / 2, height: 200, audioEl: null };
+  }
+
+  conn.on('data', (data) => {
+    if (data.type === 'pos') {
+      remotePlayers[conn.peer].x = data.x;
+      remotePlayers[conn.peer].y = data.y;
+      remotePlayers[conn.peer].height = data.height || 200;
+    }
+  });
+
+  conn.on('close', () => {
+    if (remotePlayers[conn.peer] && remotePlayers[conn.peer].audioEl) {
+      remotePlayers[conn.peer].audioEl.remove();
+    }
+    delete remotePlayers[conn.peer];
+    status.textContent = "Друг вышел из комнаты";
+  });
 }
 
-function render() {
-  handleInput();
+// Привязка динамика друга к динамической системе громкости
+function attachRemoteAudio(peerId, stream) {
+  if (!remotePlayers[peerId]) {
+    remotePlayers[peerId] = { x: W / 2, y: H / 2, height: 200, audioEl: null };
+  }
+  
+  let audio = remotePlayers[peerId].audioEl;
+  if (!audio) {
+    audio = document.createElement('audio');
+    audio.autoplay = true;
+    document.body.appendChild(audio);
+    remotePlayers[peerId].audioEl = audio;
+  }
+  audio.srcObject = stream;
+}
 
+// --- 5. РАСЧЕТ ПРОСТРАНСТВЕННОГО ЗВУКА И ОТРЕСОВКА ---
+function updateSpatialAudioAndRender() {
   ctx.clearRect(0, 0, W, H);
 
-  // Отрисовка фона
   if (hasCustomBg && bgImage.complete) {
     ctx.drawImage(bgImage, 0, 0, W, H);
   } else {
-    drawGrid();
+    // Дефолтная сетка
+    ctx.strokeStyle = '#1e1e1e'; ctx.lineWidth = 1;
+    for (let x = 0; x < W; x += 50) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+    for (let y = 0; y < H; y += 50) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
   }
 
-  // Отрисовка игрока (аватарка с камерой)
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(0, 229, 255, 0.2)';
-  ctx.fill();
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = '#00e5ff';
-  ctx.stroke();
-  ctx.clip(); // Обрезаем по кругу
+  // Отрисовка друзей и динамический расчет громкости голоса
+  Object.keys(remotePlayers).forEach((id) => {
+    const rp = remotePlayers[id];
+    
+    // Расчет расстояния
+    const dx = myPlayer.x - rp.x;
+    const dy = myPlayer.y - rp.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // Громкость затухает на расстоянии от 0 до 600 пикселей
+    const maxDistance = 600;
+    let volume = 1 - Math.min(distance / maxDistance, 1);
+    volume = Math.pow(volume, 2); // Плавное затухание
 
-  if (isSegmentationReady) {
-    // Отрисовываем очищенный силуэт персонажа
-    ctx.drawImage(segCanvas, player.x - player.radius, player.y - player.radius, player.radius * 2, player.radius * 2);
-  } else if (webcam.readyState >= 2) {
-    // Обычное видео пока грузится сегментация
-    ctx.drawImage(webcam, player.x - player.radius, player.y - player.radius, player.radius * 2, player.radius * 2);
-  }
+    if (rp.audioEl) {
+      rp.audioEl.volume = volume;
+    }
 
-  ctx.restore();
+    drawPerson(rp.x, rp.y, rp.height, false);
+  });
 
-  requestAnimationFrame(render);
+  // Отрисовка вашего персонажа
+  drawPerson(myPlayer.x, myPlayer.y, myPlayer.height, true);
+
+  requestAnimationFrame(updateSpatialAudioAndRender);
 }
 
-// --- 5. ИНИЦИАЛИЗАЦИЯ ---
+function drawPerson(x, y, pHeight, isLocal) {
+  const pWidth = pHeight;
+  const drawX = x - pWidth / 2;
+  const drawY = y - pHeight;
+
+  // Овал-подставка
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(x, y, pWidth / 2.5, 12, 0, 0, Math.PI * 2);
+  ctx.fillStyle = isLocal ? 'rgba(0, 229, 255, 0.25)' : 'rgba(255, 0, 100, 0.25)';
+  ctx.fill();
+  ctx.strokeStyle = isLocal ? '#00e5ff' : '#ff0066';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+
+  if (isLocal && isSegmentationReady) {
+    ctx.drawImage(segCanvas, drawX, drawY, pWidth, pHeight);
+  } else if (!isLocal) {
+    ctx.strokeStyle = '#ff0066';
+    ctx.strokeRect(drawX, drawY, pWidth, pHeight);
+  } else if (webcam.readyState >= 2) {
+    ctx.drawImage(webcam, drawX, drawY, pWidth, pHeight);
+  }
+}
+
+// --- 6. ЗАПУСК КАМЕРЫ И МИКРОФОНА ---
 async function start() {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 320 }, audio: false });
-    webcam.srcObject = stream;
+    // Включаем одновременно камеру И МИКРОФОН (audio: true)
+    localStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 320 } },
+      audio: true
+    });
+    
+    webcam.srcObject = localStream;
     await webcam.play();
 
     async function processCamera() {
@@ -198,10 +326,9 @@ async function start() {
     }
     processCamera();
   } catch (err) {
-    status.textContent = "Ошибка камеры: " + err.message;
+    status.textContent = "Ошибка доступа (Камера/Микрофон): " + err.message;
   }
-  
-  render();
+  updateSpatialAudioAndRender();
 }
 
 start();
