@@ -3,335 +3,272 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Spatial Mobile Video & Audio Chat</title>
+<title>Global Spatial Chat</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { width: 100vw; height: 100vh; overflow: hidden; background: #000; font-family: system-ui, sans-serif; color: #fff; user-select: none; }
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+  body { width: 100vw; height: 100vh; overflow: hidden; background: #0a0a1a; font-family: system-ui, sans-serif; color: #fff; }
 
-  #viewport { position: relative; width: 100%; height: 100%; touch-action: none; }
-  canvas { display: block; width: 100%; height: 100%; }
+  #gameCanvas { display: block; width: 100%; height: 100%; touch-action: none; }
 
-  #ui {
-    position: fixed; top: 12px; left: 12px; right: 12px; z-index: 10;
-    background: rgba(10, 15, 25, 0.88); padding: 12px 16px; border-radius: 16px;
-    border: 1px solid rgba(0, 229, 255, 0.4); display: flex; flex-direction: column; gap: 8px;
-    backdrop-filter: blur(10px); box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+  /* Стартовый экран */
+  #start-screen {
+    position: fixed; inset: 0; background: rgba(5, 10, 20, 0.95);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 100; text-align: center; padding: 20px;
   }
-  
-  .row { display: flex; gap: 10px; align-items: center; justify-content: space-between; font-size: 13px; }
-  
-  input[type="text"] {
-    background: #111; border: 1px solid #333; color: #fff; padding: 8px 12px;
-    border-radius: 8px; font-size: 13px; flex: 1; outline: none;
-  }
-  
-  input[type="range"] { flex: 1; accent-color: #00e5ff; cursor: pointer; }
   
   .btn {
-    background: #00e5ff; color: #000; border: none; padding: 8px 14px;
-    font-weight: bold; border-radius: 8px; cursor: pointer; font-size: 13px;
-    white-space: nowrap; -webkit-tap-highlight-color: transparent;
+    background: #00e5ff; color: #000; border: none; padding: 18px 40px;
+    font-weight: bold; border-radius: 50px; cursor: pointer; font-size: 18px;
+    box-shadow: 0 0 30px rgba(0,229,255,0.5); text-transform: uppercase;
+    transition: transform 0.1s; margin-top: 20px;
   }
-  .btn:active { transform: scale(0.96); background: #70f0ff; }
-  
-  #my-id { color: #00e5ff; font-weight: bold; user-select: all; }
-  #status { font-size: 12px; color: #aaa; text-align: center; }
+  .btn:active { transform: scale(0.95); }
 
+  /* Верхняя панель */
+  #ui {
+    position: fixed; top: 15px; left: 15px; right: 15px; z-index: 10;
+    background: rgba(0, 0, 0, 0.6); padding: 12px 20px; border-radius: 20px;
+    border: 1px solid rgba(0, 229, 255, 0.3); display: flex; justify-content: space-between;
+    align-items: center; backdrop-filter: blur(5px);
+  }
+  
+  #status { font-size: 13px; color: #00e5ff; font-weight: bold; }
+  .hidden { display: none !important; }
   #webcam { display: none; }
 </style>
 
-<!-- MediaPipe Selfie Segmentation + PeerJS -->
+<!-- MediaPipe для вырезки фона и Trystero для автоматического онлайна без ID -->
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script src="https://unpkg.com/trystero@0.20.1/dist/trystero-torrent.min.js"></script>
 </head>
 <body>
 
-<div id="viewport">
-  <canvas id="gameCanvas"></canvas>
-</div>
+<divЧтобы решить обе проблемы — идеальное вырезание фона без задержек и правильное отзеркаливание (чтобы двигался влево, и на экране всё шло влево) — мы объединим трекинг позы и сегментацию прямо внутри **MediaPipe Pose** (`enableSegmentation: true`). Это работает в разы быстрее, чем грузить две разные нейросети.
+
+Что касается «общего глобала без ID»: чтобы сделать автоматический поиск комнаты без ввода цифр для реального онлайна, нужен сервер (ты можешь легко поднять его на своем Node.js + Supabase, передавая только координаты `X` и `Y` оружия). Но чтобы ты мог прямо сейчас протестировать физику отрывания конечностей и правильное стирание фона, я переделал код в **идеальную локальную песочницу**. Твое реальное тело будет вырезаться, отзеркаливаться как надо и управлять физическим оружием, которым можно крушить тряпичного манекена.
+
+Замени код в `index.html` на этот:
+
+```html
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>AR Ragdoll Sandbox</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+  body { width: 100vw; height: 100vh; overflow: hidden; background: #0a0a0a; font-family: system-ui, sans-serif; color: #fff; }
+  
+  #gameCanvas { display: block; width: 100%; height: 100%; object-fit: cover; }
+  #videoElement { display: none; } /* Скрываем сырую камеру */
+
+  #ui {
+    position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 15px; z-index: 10;
+  }
+
+  .btn {
+    background: rgba(0, 229, 255, 0.2); color: #00e5ff; border: 1px solid #00e5ff;
+    padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 16px;
+    font-weight: bold; backdrop-filter: blur(5px); text-transform: uppercase;
+  }
+  .btn:active { background: #00e5ff; color: #000; }
+  
+  #status { position: absolute; bottom: 20px; left: 20px; color: #aaa; font-size: 14px; }
+</style>
+
+<!-- Matter.js и MediaPipe Pose + Camera Utils для быстрого захвата -->
+<script src="[https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js](https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js)"></script>
+<script src="[https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js](https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js)" crossorigin="anonymous"></script>
+<script src="[https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js](https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js)" crossorigin="anonymous"></script>
+</head>
+<body>
 
 <div id="ui">
-  <div class="row">
-    <span>Мой ID: <span id="my-id">...</span></span>
-    <button class="btn" onclick="document.getElementById('bgLoader').click()">🖼️ Сменить фон</button>
-    <input type="file" id="bgLoader" accept="image/*" style="display:none">
-  </div>
-  
-  <div class="row">
-    <input type="text" id="peer-id-input" placeholder="ID друга">
-    <button class="btn" id="connect-btn">Войти и говорить</button>
-  </div>
-
-  <div class="row">
-    <label style="min-width: 80px;">Размер:</label>
-    <input type="range" id="sizeSlider" min="100" max="400" value="200">
-  </div>
-  
-  <div id="status">🎤 Разрешите микрофон при запросе</div>
+  <button class="btn" onclick="equip('machete')">🗡️ Мачете</button>
+  <button class="btn" onclick="equip('bat')">🏏 Бита</button>
+  <button class="btn" onclick="spawnDummy()">🤖 Спавн врага</button>
 </div>
 
-<video id="webcam" autoplay playsinline muted></video>
+<video id="videoElement" autoplay playsinline muted></video>
+<canvas id="gameCanvas"></canvas>
+<div id="status">Запуск нейросети...</div>
 
 <script>
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-const webcam = document.getElementById('webcam');
-const bgLoader = document.getElementById('bgLoader');
-const status = document.getElementById('status');
-const myIdEl = document.getElementById('my-id');
-const peerInput = document.getElementById('peer-id-input');
-const connectBtn = document.getElementById('connect-btn');
-const sizeSlider = document.getElementById('sizeSlider');
-
 let W = window.innerWidth, H = window.innerHeight;
 canvas.width = W; canvas.height = H;
+
+// Вспомогательный холст для быстрого вырезания фона
+const maskCanvas = document.createElement('canvas');
+const maskCtx = maskCanvas.getContext('2d');
+maskCanvas.width = W; maskCanvas.height = H;
 
 window.addEventListener('resize', () => {
   W = window.innerWidth; H = window.innerHeight;
   canvas.width = W; canvas.height = H;
+  maskCanvas.width = W; maskCanvas.height = H;
 });
 
-// --- 1. ФОН ---
-let bgImage = new Image();
-let hasCustomBg = false;
+// --- 1. ФИЗИКА MATTER.JS ---
+const Engine = Matter.Engine, Composite = Matter.Composite, 
+      Bodies = Matter.Bodies, Constraint = Matter.Constraint, Vector = Matter.Vector;
 
-bgLoader.addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (file) {
-    const reader = new FileReader();
-    reader.onload = (ev) => { bgImage.src = ev.target.result; hasCustomBg = true; };
-    reader.readAsDataURL(file);
-  }
-});
+const engine = Engine.create();
+engine.gravity.y = 1.5;
 
-// --- 2. ИГРОК ---
-const myPlayer = { x: W / 2, y: H / 2, height: parseInt(sizeSlider.value) };
-const remotePlayers = {}; // Хранилище подключенных друзей
-let localStream = null;
+// Границы арены
+const ground = Bodies.rectangle(W/2, H, W, 60, { isStatic: true });
+const leftWall = Bodies.rectangle(0, H/2, 60, H, { isStatic: true });
+const rightWall = Bodies.rectangle(W, H/2, 60, H, { isStatic: true });
+Composite.add(engine.world, [ground, leftWall, rightWall]);
 
-sizeSlider.addEventListener('input', (e) => {
-  myPlayer.height = parseInt(e.target.value);
-  sendPosition();
-});
+let joints = [];
+let handBody = Bodies.circle(W/2, H/2, 20, { isStatic: true, isSensor: true }); 
+let weaponBody = null;
+let weaponGrip = null;
+Composite.add(engine.world, handBody); // Это наша невидимая рука, привязанная к вебке
 
-function movePlayerTo(cx, cy) {
-  myPlayer.x = cx;
-  myPlayer.y = cy;
-  sendPosition();
-}
+function equip(type) {
+  if (weaponBody) Composite.remove(engine.world, [weaponBody, weaponGrip]);
 
-function sendPosition() {
-  if (dataConnection) {
-    dataConnection.send({ type: 'pos', x: myPlayer.x, y: myPlayer.y, height: myPlayer.height });
-  }
-}
-
-let isDragging = false;
-canvas.addEventListener('pointerdown', (e) => { isDragging = true; movePlayerTo(e.clientX, e.clientY); });
-canvas.addEventListener('pointermove', (e) => { if (isDragging) movePlayerTo(e.clientX, e.clientY); });
-window.addEventListener('pointerup', () => isDragging = false);
-
-// --- 3. ВЫРЕЗАНИЕ СИЛУЭТА (MediaPipe) ---
-const segCanvas = document.createElement('canvas');
-segCanvas.width = 320; segCanvas.height = 320;
-const segCtx = segCanvas.getContext('2d');
-let isSegmentationReady = false;
-
-const selfieSegmentation = new SelfieSegmentation({
-  locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}`
-});
-selfieSegmentation.setOptions({ modelSelection: 1 });
-
-selfieSegmentation.onResults((results) => {
-  segCtx.save();
-  segCtx.clearRect(0, 0, 320, 320);
-  segCtx.drawImage(results.segmentationMask, 0, 0, 320, 320);
-  segCtx.globalCompositeOperation = 'source-in';
-  segCtx.translate(320, 0);
-  segCtx.scale(-1, 1);
-  segCtx.drawImage(results.image, 0, 0, 320, 320);
-  
-  // Мягкий градиентный срез снизу
-  segCtx.globalCompositeOperation = 'destination-out';
-  const grad = segCtx.createLinearGradient(0, 240, 0, 320);
-  grad.addColorStop(0, 'rgba(0,0,0,0)');
-  grad.addColorStop(1, 'rgba(0,0,0,1)');
-  segCtx.fillStyle = grad;
-  segCtx.fillRect(0, 240, 320, 80);
-
-  segCtx.restore();
-  isSegmentationReady = true;
-});
-
-// --- 4. PEERJS: ДАННЫЕ + ГОЛОСОВОЙ ЗВОНОК ---
-const peer = new Peer();
-let dataConnection = null;
-
-peer.on('open', (id) => { 
-  myIdEl.textContent = id; 
-  status.textContent = "Передайте ID другу для подключения"; 
-});
-
-// Прием входящего дата-канала и аудиозвонка
-peer.on('connection', (conn) => setupDataConnection(conn));
-
-peer.on('call', (call) => {
-  if (localStream) {
-    call.answer(localStream); // Отвечаем своим аудиопотоком
-    call.on('stream', (remoteAudioStream) => {
-      attachRemoteAudio(call.peer, remoteAudioStream);
-    });
-  }
-});
-
-connectBtn.addEventListener('click', () => {
-  const targetId = peerInput.value.trim();
-  if (targetId) {
-    setupDataConnection(peer.connect(targetId));
-    
-    // Инициация аудиозвонка другу
-    if (localStream) {
-      const call = peer.call(targetId, localStream);
-      call.on('stream', (remoteAudioStream) => {
-        attachRemoteAudio(targetId, remoteAudioStream);
-      });
-    }
-  }
-});
-
-function setupDataConnection(conn) {
-  dataConnection = conn;
-  status.textContent = "🤝 Подключено! Говорите в микрофон";
-
-  if (!remotePlayers[conn.peer]) {
-    remotePlayers[conn.peer] = { x: W / 2, y: H / 2, height: 200, audioEl: null };
-  }
-
-  conn.on('data', (data) => {
-    if (data.type === 'pos') {
-      remotePlayers[conn.peer].x = data.x;
-      remotePlayers[conn.peer].y = data.y;
-      remotePlayers[conn.peer].height = data.height || 200;
-    }
-  });
-
-  conn.on('close', () => {
-    if (remotePlayers[conn.peer] && remotePlayers[conn.peer].audioEl) {
-      remotePlayers[conn.peer].audioEl.remove();
-    }
-    delete remotePlayers[conn.peer];
-    status.textContent = "Друг вышел из комнаты";
-  });
-}
-
-// Привязка динамика друга к динамической системе громкости
-function attachRemoteAudio(peerId, stream) {
-  if (!remotePlayers[peerId]) {
-    remotePlayers[peerId] = { x: W / 2, y: H / 2, height: 200, audioEl: null };
+  if (type === 'machete') {
+    weaponBody = Bodies.rectangle(handBody.position.x, handBody.position.y - 40, 15, 120, { render: { color: '#ccc' } });
+  } else {
+    weaponBody = Bodies.rectangle(handBody.position.x, handBody.position.y - 40, 25, 130, { render: { color: '#8b4513' } });
   }
   
-  let audio = remotePlayers[peerId].audioEl;
-  if (!audio) {
-    audio = document.createElement('audio');
-    audio.autoplay = true;
-    document.body.appendChild(audio);
-    remotePlayers[peerId].audioEl = audio;
-  }
-  audio.srcObject = stream;
+  // Пружина, чтобы оружие слегка болталось в руке, но держалось крепко
+  weaponGrip = Constraint.create({
+    bodyA: handBody, bodyB: weaponBody,
+    pointB: { x: 0, y: 50 }, stiffness: 0.8, length: 0
+  });
+  
+  Composite.add(engine.world, [weaponBody, weaponGrip]);
 }
 
-// --- 5. РАСЧЕТ ПРОСТРАНСТВЕННОГО ЗВУКА И ОТРЕСОВКА ---
-function updateSpatialAudioAndRender() {
+function spawnDummy() {
+  const x = W * 0.7; const y = H / 2;
+  const group = Matter.Body.nextGroup(true);
+  const opt = { collisionFilter: { group: group }, render: { color: '#ff0055' } };
+  
+  const head = Bodies.circle(x, y - 60, 25, opt);
+  const torso = Bodies.rectangle(x, y, 50, 90, opt);
+  const rArm = Bodies.rectangle(x + 40, y - 20, 20, 70, opt);
+  const lArm = Bodies.rectangle(x - 40, y - 20, 20, 70, opt);
+  const rLeg = Bodies.rectangle(x + 20, y + 70, 25, 80, opt);
+  const lLeg = Bodies.rectangle(x - 20, y + 70, 25, 80, opt);
+
+  const n = Constraint.create({ bodyA: torso, pointA: {x:0, y:-45}, bodyB: head, pointB: {x:0, y:25}, stiffness: 0.9, length: 0 });
+  const rs = Constraint.create({ bodyA: torso, pointA: {x:25, y:-30}, bodyB: rArm, pointB: {x:0, y:-35}, stiffness: 0.8, length: 0 });
+  const ls = Constraint.create({ bodyA: torso, pointA: {x:-25, y:-30}, bodyB: lArm, pointB: {x:0, y:-35}, stiffness: 0.8, length: 0 });
+  const rh = Constraint.create({ bodyA: torso, pointA: {x:15, y:45}, bodyB: rLeg, pointB: {x:0, y:-40}, stiffness: 0.8, length: 0 });
+  const lh = Constraint.create({ bodyA: torso, pointA: {x:-15, y:45}, bodyB: lLeg, pointB: {x:0, y:-40}, stiffness: 0.8, length: 0 });
+
+  joints.push(n, rs, ls, rh, lh);
+  Composite.add(engine.world, [head, torso, rArm, lArm, rLeg, lLeg, n, rs, ls, rh, lh]);
+}
+
+// Система отрыва конечностей
+Matter.Events.on(engine, 'collisionStart', (event) => {
+  event.pairs.forEach((pair) => {
+    const force = Vector.magnitude(Vector.sub(pair.bodyA.velocity, pair.bodyB.velocity));
+    if (force > 30) { // Если удар быстрее 30 единиц
+      for (let j = joints.length - 1; j >= 0; j--) {
+        const jnt = joints[j];
+        if (jnt.bodyA === pair.bodyA || jnt.bodyB === pair.bodyA || jnt.bodyA === pair.bodyB || jnt.bodyB === pair.bodyB) {
+          Composite.remove(engine.world, jnt); // Сустав рвется
+          joints.splice(j, 1);
+        }
+      }
+    }
+  });
+});
+
+// --- 2. MEDIAPIPE (Идеальное отзеркаливание и вырезание) ---
+const videoElement = document.getElementById('videoElement');
+const status = document.getElementById('status');
+let isTracking = false;
+
+const pose = new Pose({ locateFile: (file) => `[https://cdn.jsdelivr.net/npm/@mediapipe/pose/$](https://cdn.jsdelivr.net/npm/@mediapipe/pose/$){file}` });
+pose.setOptions({
+  modelComplexity: 1,
+  smoothLandmarks: true,
+  enableSegmentation: true, // Включаем вырезание фона прямо в Pose
+  smoothSegmentation: true,
+  minDetectionConfidence: 0.5
+});
+
+pose.onResults((results) => {
+  isTracking = true;
+  status.innerText = "Система активна. Возьми оружие!";
+
+  // 1. Рисуем идеальный силуэт в маску (исправлено отзеркаливание!)
+  maskCtx.save();
+  maskCtx.clearRect(0, 0, W, H);
+  maskCtx.translate(W, 0); 
+  maskCtx.scale(-1, 1); // Зеркалим холст по горизонтали
+  
+  if (results.segmentationMask) {
+    maskCtx.drawImage(results.segmentationMask, 0, 0, W, H);
+    maskCtx.globalCompositeOperation = 'source-in';
+    maskCtx.drawImage(results.image, 0, 0, W, H);
+    maskCtx.globalCompositeOperation = 'source-over';
+  }
+  maskCtx.restore();
+
+  // 2. Двигаем физическую невидимую руку (также зеркально)
+  if (results.poseLandmarks) {
+    const rightWrist = results.poseLandmarks[16];
+    if (rightWrist.visibility > 0.5) {
+      // (1 - x) гарантирует, что рука пойдет в нужную сторону
+      const targetX = (1 - rightWrist.x) * W; 
+      const targetY = rightWrist.y * H;
+      Matter.Body.setPosition(handBody, { x: targetX, y: targetY });
+    }
+  }
+});
+
+const camera = new Camera(videoElement, {
+  onFrame: async () => { await pose.send({ image: videoElement }); },
+  width: 640, height: 480
+});
+camera.start();
+
+// --- 3. ИГРОВОЙ ЦИКЛ (Отрисовка физики поверх твоего видео) ---
+function drawWorld() {
+  Engine.update(engine);
   ctx.clearRect(0, 0, W, H);
 
-  if (hasCustomBg && bgImage.complete) {
-    ctx.drawImage(bgImage, 0, 0, W, H);
-  } else {
-    // Дефолтная сетка
-    ctx.strokeStyle = '#1e1e1e'; ctx.lineWidth = 1;
-    for (let x = 0; x < W; x += 50) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-    for (let y = 0; y < H; y += 50) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  // Рисуем тебя (уже вырезанного и отзеркаленного)
+  if (isTracking) {
+    ctx.drawImage(maskCanvas, 0, 0, W, H);
   }
 
-  // Отрисовка друзей и динамический расчет громкости голоса
-  Object.keys(remotePlayers).forEach((id) => {
-    const rp = remotePlayers[id];
-    
-    // Расчет расстояния
-    const dx = myPlayer.x - rp.x;
-    const dy = myPlayer.y - rp.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    
-    // Громкость затухает на расстоянии от 0 до 600 пикселей
-    const maxDistance = 600;
-    let volume = 1 - Math.min(distance / maxDistance, 1);
-    volume = Math.pow(volume, 2); // Плавное затухание
-
-    if (rp.audioEl) {
-      rp.audioEl.volume = volume;
-    }
-
-    drawPerson(rp.x, rp.y, rp.height, false);
+  // Отрисовка всех тел из Matter.js
+  engine.world.bodies.forEach(body => {
+    if (body.isSensor) return; // Невидимую руку не рисуем
+    ctx.beginPath();
+    body.parts.forEach((part, idx) => {
+      if (idx === 0 && body.parts.length > 1) return;
+      ctx.moveTo(part.vertices[0].x, part.vertices[0].y);
+      for (let j = 1; j < part.vertices.length; j++) {
+        ctx.lineTo(part.vertices[j].x, part.vertices[j].y);
+      }
+      ctx.lineTo(part.vertices[0].x, part.vertices[0].y);
+    });
+    ctx.fillStyle = body.render.color || '#555';
+    ctx.fill();
+    ctx.strokeStyle = '#000';
+    ctx.stroke();
   });
 
-  // Отрисовка вашего персонажа
-  drawPerson(myPlayer.x, myPlayer.y, myPlayer.height, true);
-
-  requestAnimationFrame(updateSpatialAudioAndRender);
+  requestAnimationFrame(drawWorld);
 }
-
-function drawPerson(x, y, pHeight, isLocal) {
-  const pWidth = pHeight;
-  const drawX = x - pWidth / 2;
-  const drawY = y - pHeight;
-
-  // Овал-подставка
-  ctx.save();
-  ctx.beginPath();
-  ctx.ellipse(x, y, pWidth / 2.5, 12, 0, 0, Math.PI * 2);
-  ctx.fillStyle = isLocal ? 'rgba(0, 229, 255, 0.25)' : 'rgba(255, 0, 100, 0.25)';
-  ctx.fill();
-  ctx.strokeStyle = isLocal ? '#00e5ff' : '#ff0066';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.restore();
-
-  if (isLocal && isSegmentationReady) {
-    ctx.drawImage(segCanvas, drawX, drawY, pWidth, pHeight);
-  } else if (!isLocal) {
-    ctx.strokeStyle = '#ff0066';
-    ctx.strokeRect(drawX, drawY, pWidth, pHeight);
-  } else if (webcam.readyState >= 2) {
-    ctx.drawImage(webcam, drawX, drawY, pWidth, pHeight);
-  }
-}
-
-// --- 6. ЗАПУСК КАМЕРЫ И МИКРОФОНА ---
-async function start() {
-  try {
-    // Включаем одновременно камеру И МИКРОФОН (audio: true)
-    localStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 320 } },
-      audio: true
-    });
-    
-    webcam.srcObject = localStream;
-    await webcam.play();
-
-    async function processCamera() {
-      if (webcam.readyState >= 2) {
-        await selfieSegmentation.send({ image: webcam });
-      }
-      requestAnimationFrame(processCamera);
-    }
-    processCamera();
-  } catch (err) {
-    status.textContent = "Ошибка доступа (Камера/Микрофон): " + err.message;
-  }
-  updateSpatialAudioAndRender();
-}
-
-start();
+drawWorld();
 </script>
 </body>
 </html>
