@@ -1,164 +1,180 @@
 <!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Симбионт</title>
+<title>Mark Nano</title>
 <style>
 html,body{margin:0;height:100%;background:#000;color:#cfe;font-family:system-ui,sans-serif;overflow:hidden}
 #stage{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(100vw,calc(100vh*4/3));aspect-ratio:4/3}
-video,canvas{position:absolute;inset:0;width:100%;height:100%}
-video{transform:scaleX(-1);filter:grayscale(1) brightness(.55)}
-#ui{position:fixed;left:0;right:0;bottom:14px;text-align:center;font-size:14px;text-shadow:0 0 6px #000}
+canvas{position:absolute;inset:0;width:100%!important;height:100%!important}
+#v{position:absolute;width:2px;height:2px;opacity:0;pointer-events:none}
+#ui{position:fixed;left:0;right:0;bottom:14px;text-align:center;font-size:14px;text-shadow:0 0 6px #000;z-index:5}
 #bar{width:220px;height:6px;margin:8px auto 0;background:#222;border-radius:3px;overflow:hidden}
-#bar i{display:block;height:100%;width:0;background:#7af}
-#go{position:fixed;inset:0;margin:auto;width:260px;height:56px;font-size:18px;border:0;border-radius:28px;background:#111;color:#fff;box-shadow:0 0 30px #5af;cursor:pointer}
+#bar i{display:block;height:100%;width:0;background:#6cf}
+#go{position:fixed;inset:0;margin:auto;width:280px;height:56px;font-size:18px;border:0;border-radius:28px;background:#7a0c0c;color:#ffd36a;box-shadow:0 0 30px #f44;cursor:pointer;z-index:9}
 </style></head><body>
-<div id="stage"><video id="v" playsinline muted></video></div>
-<button id="go">Включить камеру</button>
-<div id="ui"><div id="msg">Руку выше головы — шипы · Ладони вместе — шар · Руки в стороны — крылья · Наклони голову и держи 3 с — всё стечёт</div><div id="bar"><i></i></div></div>
+<div id="stage"></div><video id="v" playsinline muted></video>
+<button id="go">Надеть костюм</button>
+<div id="ui"><div id="msg">Руки над головой — репульсоры и полёт · Голову вниз на 3 с — костюм рассыплется в наниты</div><div id="bar"><i></i></div></div>
 
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
 import * as THREE from 'three';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
+import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
+import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
+import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
 import {PoseLandmarker,FilesetResolver} from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs';
 
-const $=id=>document.getElementById(id), msg=$('msg'), bar=$('bar').firstChild, video=$('v');
-const R=Math.random;
-$('go').onclick=async()=>{ $('go').remove(); try{ await start(); }catch(e){ msg.textContent='Ошибка: '+e.message; } };
+const $=id=>document.getElementById(id),msg=$('msg'),bar=$('bar').firstChild,video=$('v'),R=Math.random;
+$('go').onclick=async()=>{$('go').remove();try{await start()}catch(e){msg.textContent='Ошибка: '+e.message}};
 
 async function start(){
   msg.textContent='Запрашиваю камеру…';
   video.srcObject=await navigator.mediaDevices.getUserMedia({video:{width:640,height:480,facingMode:'user'}});
   await video.play();
-  const A=video.videoWidth/video.videoHeight;
-  $('stage').style.aspectRatio=A;
+  const A=video.videoWidth/video.videoHeight; $('stage').style.aspectRatio=A;
   msg.textContent='Загружаю модель тела…';
   const fs=await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
-  const pose=await PoseLandmarker.createFromOptions(fs,{
-    baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',delegate:'GPU'},
-    runningMode:'VIDEO',numPoses:1});
+  const pose=await PoseLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',delegate:'GPU'},runningMode:'VIDEO',numPoses:1});
 
-  // ---------- 3D сцена ----------
-  const renderer=new THREE.WebGLRenderer({alpha:true,antialias:true});
+  // ---- сцена, свет, блум ----
+  const renderer=new THREE.WebGLRenderer({antialias:true});
   renderer.setPixelRatio(Math.min(devicePixelRatio,2));
   $('stage').appendChild(renderer.domElement);
   const scene=new THREE.Scene();
-  const pm=new THREE.PMREMGenerator(renderer);
-  scene.environment=pm.fromScene(new RoomEnvironment(),.04).texture;
+  const vt=new THREE.VideoTexture(video); vt.colorSpace=THREE.SRGBColorSpace;
+  vt.wrapS=THREE.RepeatWrapping; vt.repeat.x=-1; vt.offset.x=1;
+  scene.background=vt; scene.backgroundIntensity=.6;
+  scene.environment=new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(),.04).texture;
   const cam=new THREE.OrthographicCamera(-A,A,1,-1,.1,10); cam.position.z=5;
-  const dl=new THREE.DirectionalLight(0x9bf,2); dl.position.set(-2,3,4); scene.add(dl);
-  const pl=new THREE.PointLight(0xffffff,3,10); pl.position.set(2,1,3); scene.add(pl);
-  const resize=()=>{const r=$('stage').getBoundingClientRect();renderer.setSize(r.width,r.height,false)};
+  const key=new THREE.DirectionalLight(0xffffff,2.2); key.position.set(-2,3,4); scene.add(key);
+  const reactorLight=new THREE.PointLight(0x8fe8ff,3,3); scene.add(reactorLight);
+  const comp=new EffectComposer(renderer); comp.addPass(new RenderPass(scene,cam));
+  comp.addPass(new UnrealBloomPass(new THREE.Vector2(512,512),.8,.55,.9)); comp.addPass(new OutputPass());
+  const resize=()=>{const r=$('stage').getBoundingClientRect();renderer.setSize(r.width,r.height,false);comp.setSize(r.width,r.height)};
   addEventListener('resize',resize); resize();
 
-  // ---------- частицы-симбионт ----------
-  const P=[];
-  const add=o=>P.push({...o,pos:new THREE.Vector3(0,-5,0),vel:new THREE.Vector3(),k:.1+R()*.2,s:.75+R()*.5,ph:R()*6.28,
-    sd:new THREE.Vector3(R()-.5,R()-.5,R()-.5).normalize(),slide:(R()-.5)*.5});
-  // [a,b,кол-во,радиус,рука,предплечье]
-  [[11,13,45,.15,'L',0],[13,15,50,.12,'L',1],[12,14,45,.15,'R',0],[14,16,50,.12,'R',1],
-   [15,19,18,.1,'L',1],[16,20,18,.1,'R',1],
-   [23,25,55,.2,'',0],[25,27,55,.15,'',0],[24,26,55,.2,'',0],[26,28,55,.15,'',0]]
-  .forEach(([a,b,n,r,arm,fore])=>{for(let i=0;i<n;i++)add({type:'b',a,b,r,arm,fore,t:R(),ang:R()*6.28})});
-  for(let i=0;i<190;i++)add({type:'q',u:R(),v:R(),wing:R()<.4,f:R(),g:R()});
-  for(let i=0;i<120;i++)add({type:'h'});
+  // ---- материалы: красный лак, золото, швы панелей ----
+  const c=document.createElement('canvas'); c.width=c.height=512; const g=c.getContext('2d');
+  g.fillStyle='#999'; g.fillRect(0,0,512,512); g.strokeStyle='#333'; g.lineWidth=4;
+  for(let i=0;i<7;i++){const y=R()*512,x=R()*512;g.beginPath();g.moveTo(0,y);g.lineTo(512,y);g.moveTo(x,0);g.lineTo(x,512);g.stroke()}
+  g.fillStyle='#555'; for(let i=0;i<60;i++)g.fillRect(R()*512,R()*512,4,4);
+  const bump=new THREE.CanvasTexture(c); bump.wrapS=bump.wrapT=THREE.RepeatWrapping;
+  const red=new THREE.MeshPhysicalMaterial({color:0x9a0c0c,metalness:.85,roughness:.28,clearcoat:1,clearcoatRoughness:.1,bumpMap:bump,bumpScale:1.2});
+  const gold=new THREE.MeshPhysicalMaterial({color:0xd8a63a,metalness:1,roughness:.2,clearcoat:.5,bumpMap:bump,bumpScale:1.2});
+  const dark=new THREE.MeshStandardMaterial({color:0x1b1b20,metalness:.9,roughness:.45});
+  const glow=new THREE.MeshBasicMaterial({color:new THREE.Color(2.2,3.4,4)});
 
-  const mesh=new THREE.InstancedMesh(new THREE.SphereGeometry(1,14,14),
-    new THREE.MeshPhysicalMaterial({color:0x07070b,metalness:1,roughness:.13,clearcoat:1,envMapIntensity:1.3}),P.length);
-  mesh.frustumCulled=false; scene.add(mesh);
+  // ---- состояние тела ----
+  const L=Array.from({length:33},()=>new THREE.Vector3()),vis=new Array(33).fill(0),Y=new THREE.Vector3(0,1,0);
+  const suit=new THREE.Group(); scene.add(suit);
+  const pieces=[],parts=[];
+  const S1=new THREE.SphereGeometry(1,32,24);
+  const lathe=(r0,r1,b)=>new THREE.LatheGeometry([[r0*.85,-.5],[r0,-.46],[(r0+r1)/2*b,0],[r1,.46],[r1*.85,.5]].map(p=>new THREE.Vector2(...p)),32);
+  const add=(root,th,need,upd,mesh)=>{suit.add(root);(mesh||[root]).forEach(m=>parts.push(m));pieces.push({root,th,need,upd})};
+  const seg=(a,b,r0,r1,bu,mat)=>{const m=new THREE.Mesh(lathe(r0,r1,bu),mat);
+    add(m,.3+R()*.6,[a,b],sw=>{const d=L[b].clone().sub(L[a]),n=d.length();m.position.copy(L[a]).addScaledVector(d,.5);m.quaternion.setFromUnitVectors(Y,d.normalize());m.scale.set(sw,n*1.05,sw)})};
+  const ball=(ids,k,mat,fn)=>{const m=new THREE.Mesh(S1,mat);
+    add(m,.3+R()*.6,ids,(sw,C)=>{fn(m,sw,C);m.scale.multiplyScalar(k*sw)})};
 
-  // ---------- состояние ----------
-  const L=Array.from({length:33},()=>new THREE.Vector3()), vis=new Array(33).fill(0);
-  let have=false, melted=false, hold=0, base=null, back=0, lastT=-1;
-  const V=(x,y,z)=>new THREE.Vector3(x,y,z), dummy=new THREE.Object3D();
+  // конечности
+  seg(11,13,.17,.14,1.12,red); seg(12,14,.17,.14,1.12,red);
+  seg(13,15,.14,.1,1.2,gold);  seg(14,16,.14,.1,1.2,gold);
+  seg(15,19,.1,.08,1,red);     seg(16,20,.1,.08,1,red);
+  seg(23,25,.24,.17,1.12,red); seg(24,26,.24,.17,1.12,red);
+  seg(25,27,.18,.12,1.2,red);  seg(26,28,.18,.12,1.2,red);
+  seg(27,31,.13,.09,1,gold);   seg(28,32,.13,.09,1,gold);
+  // суставы и наплечники
+  [[13,.11,gold],[14,.11,gold],[25,.13,gold],[26,.13,gold],[11,.2,red],[12,.2,red]].forEach(([i,k,m])=>
+    ball([i],k,m,(o)=>o.position.copy(L[i])));
+  // корпус
+  const torso=(t,rx,ry,rz,mat)=>{const m=new THREE.Mesh(S1,mat);
+    add(m,.3+R()*.6,[11,12,23,24],(sw,C)=>{m.position.copy(C.sm).lerp(C.hm,t);m.scale.set(sw*rx,C.tl*ry,sw*rz);m.rotation.z=C.roll})};
+  torso(.36,.62,.36,.34,red); torso(.74,.46,.26,.28,gold); torso(1,.5,.14,.3,red);
+  // реактор
+  const rg=new THREE.Group();
+  rg.add(new THREE.Mesh(new THREE.TorusGeometry(.12,.03,16,40),gold),new THREE.Mesh(new THREE.CircleGeometry(.1,40),glow),new THREE.Mesh(new THREE.TorusGeometry(.06,.012,12,32),dark));
+  rg.children[2].position.z=.003; rg.children[1].position.z=.002;
+  add(rg,.9,[11,12,23,24],(sw,C)=>{rg.position.copy(C.sm).lerp(C.hm,.34).add(new THREE.Vector3(0,.04*sw,.35*sw));rg.scale.setScalar(sw*1.25);reactorLight.position.copy(rg.position).add(new THREE.Vector3(0,0,.2))},[]);
+  // шлем
+  const hg=new THREE.Group(),hm=new THREE.Mesh(S1,red),fm=new THREE.Mesh(new THREE.SphereGeometry(1,32,24,Math.PI/2-.95,1.9,.85,1.9),gold);
+  hm.scale.set(1,1.15,1.05); fm.scale.set(1.03,1.17,1.075);
+  const eye=x=>{const e=new THREE.Mesh(new THREE.BoxGeometry(.32,.07,.05),glow);e.position.set(x,.14,1.06);e.rotation.z=-x*.4;return e};
+  hg.add(hm,fm,eye(-.38),eye(.38));
+  add(hg,.45,[0,7,8],(sw,C)=>{hg.position.copy(C.hc);hg.scale.setScalar(C.hr);hg.rotation.set(C.pitch,C.yaw,C.roll,'YXZ')},[hm,fm]);
+  // репульсоры и пламя
+  [15,16].forEach((i,k)=>{const m=new THREE.Mesh(S1,glow);
+    add(m,.95,[i],(sw,C)=>{m.position.copy(L[i]);m.scale.setScalar(sw*(C.up?.16+.04*Math.sin(C.t*30):.05))})});
+  [27,28].forEach(i=>{const m=new THREE.Mesh(new THREE.ConeGeometry(.4,1.4,16),glow);m.geometry.translate(0,-.7,0);
+    add(m,.98,[i],(sw,C)=>{m.position.copy(L[i]);m.scale.setScalar(C.fly?sw*.22*(1+.3*Math.sin(C.t*40+i)):0.001)})});
+  pieces.forEach(p=>{if(!p.root.userData)p.root.userData={}});
 
-  function target(p,time,m,sw,head){
-    const t=new THREE.Vector3();
-    if(m.melted) return t;
-    if(p.type==='b'){
-      const a=L[p.a],b=L[p.b],d=b.clone().sub(a);
-      let tt=p.t,r=p.r*sw;
-      if(m.orb&&p.arm){ // шар между ладонями
-        const c=L[15].clone().add(L[16]).multiplyScalar(.5), q=p.sd.clone();
-        const x=q.x*Math.cos(time*2)+q.z*Math.sin(time*2), z=-q.x*Math.sin(time*2)+q.z*Math.cos(time*2);
-        return c.add(V(x,q.y,z).multiplyScalar(sw*.5*(1+.1*Math.sin(time*8+p.ph))));
-      }
-      if(m.up[p.arm]&&p.fore){tt=p.t*2.6;r*=(1-.85*p.t)*(1+.3*Math.sin(time*7+p.ph));} // шипы/клинок
-      const pr=V(-d.y,d.x,0).normalize();
-      return a.clone().add(d.multiplyScalar(tt)).add(pr.multiplyScalar(Math.cos(p.ang)*r)).add(V(0,0,Math.sin(p.ang)*r));
-    }
-    if(p.type==='q'){
-      if(m.wings&&p.wing){ // крылья
-        const s=p.u<.5?0:1, sh=L[s?12:11], w=L[s?16:15];
-        return sh.clone().add(w.clone().sub(sh).multiplyScalar(.2+.8*p.f))
-          .add(V(0,-p.g*sw*.9*(1-p.f),-.1*sw+Math.sin(time*5+p.ph)*.02));
-      }
-      const top=L[11].clone().lerp(L[12],p.u), bot=L[23].clone().lerp(L[24],p.u);
-      return top.lerp(bot,p.v).add(V(0,0,sw*.12));
-    }
-    const out=head.c.clone().add(p.sd.clone().multiplyScalar(head.r*1.05));
-    if(m.up.L&&m.up.R)out.add(p.sd.clone().multiplyScalar(head.r*.5*Math.max(0,Math.sin(time*6+p.ph*3)))); // корона
-    return out;
-  }
+  // ---- наниты ----
+  const N=1100,nm=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:0xffffff,metalness:1,roughness:.35,emissive:0x0a1a2a}),N);
+  nm.frustumCulled=false; scene.add(nm);
+  const pal=[0x383842,0x383842,0xb88a2a,0x9a1010].map(h=>new THREE.Color(h));
+  const nan=[...Array(N)].map((_,i)=>{nm.setColorAt(i,pal[Math.floor(R()*4)]);
+    const pi=Math.floor(R()*parts.length);return{pi,vi:Math.floor(R()*parts[pi].geometry.attributes.position.count),d:R(),ph:R()*6.28,sp:.4+R()*1.2,rx:.3+R()*.9,ry:.3+R()*.9}});
+  nm.instanceColor.needsUpdate=true;
 
+  // ---- главный цикл ----
+  let have=false,asm=0,hold=0,base=null,back=0,melted=false,lastT=-1,prev=0;
+  const dm=new THREE.Object3D(),sp=new THREE.Vector3(),tp=new THREE.Vector3(),cen=new THREE.Vector3();
+  const sstep=(a,b,x)=>{x=Math.min(1,Math.max(0,(x-a)/(b-a)));return x*x*(3-2*x)};
   function loop(now){
     requestAnimationFrame(loop);
-    const time=now/1000, dt=Math.min(.05,(now-(loop.p||now))/1000); loop.p=now;
-    if(video.currentTime!==lastT){
-      lastT=video.currentTime;
-      const res=pose.detectForVideo(video,now);
-      if(res.landmarks[0]){
-        have=true;
-        res.landmarks[0].forEach((l,i)=>{
-          const tp=V((.5-l.x)*2*A,(.5-l.y)*2,-l.z*A*1.2);
-          L[i].lerp(tp,.55); vis[i]=l.visibility;
-        });
-      } else have=false;
-    }
-    if(!have){msg.textContent='Встань в кадр так, чтобы было видно тело';}
+    const t=now/1000,dt=Math.min(.05,(now-(prev||now))/1000);prev=now;
+    if(video.currentTime!==lastT){lastT=video.currentTime;
+      const r=pose.detectForVideo(video,now);
+      if(r.landmarks[0]){have=true;r.landmarks[0].forEach((l,i)=>{L[i].lerp(new THREE.Vector3((.5-l.x)*2*A,(.5-l.y)*2,-l.z*A*.5),.55);vis[i]=l.visibility})}else have=false}
     const sw=Math.max(.15,L[11].distanceTo(L[12]));
-    const earM=L[7].clone().add(L[8]).multiplyScalar(.5);
-    const head={c:earM.clone().add(V(0,sw*.12,0)),r:Math.max(.08,L[7].distanceTo(L[8])*.85)};
-
-    // жест головой: наклон + 3 секунды
-    const d=(earM.y-L[0].y)/sw;
-    if(base===null)base=d;
-    const nod=d>base+.12;
-    if(!nod&&!melted)base+=(d-base)*.03;
-    if(nod&&!melted){hold+=dt; if(hold>=3){melted=true;hold=0;P.forEach(p=>{p.vel.set((R()-.5)*.5,R()*.2,0)})}}
-    else if(!nod){hold=0; if(melted){back+=dt; if(back>1){melted=false;back=0}}} else back=0;
+    const earM=L[7].clone().add(L[8]).multiplyScalar(.5),earW=Math.max(.05,L[7].distanceTo(L[8]));
+    const d=(earM.y-L[0].y)/sw; if(base===null)base=d;
+    const nod=d>base+.12; if(!nod&&!melted)base+=(d-base)*.03;
+    if(nod&&!melted){hold+=dt;if(hold>=3){melted=true;hold=0}}
+    else if(!nod){hold=0;if(melted){back+=dt;if(back>1){melted=false;back=0}}}else back=0;
     bar.style.width=(melted?100:hold/3*100)+'%';
-    if(have)msg.textContent=melted?'Всё стекло! Подними голову — симбионт вернётся':(nod?'Держи голову…':'Руку выше головы — шипы · Ладони вместе — шар · Руки в стороны — крылья · Наклони голову на 3 с — всё стечёт');
+    const up={L:L[15].y>L[0].y+.05&&vis[15]>.4,R:L[16].y>L[0].y+.05&&vis[16]>.4};
+    const fly=up.L&&up.R;
+    if(!have)msg.textContent='Встань в кадр так, чтобы было видно тело';
+    else msg.textContent=melted?'Костюм рассыпался в наниты. Подними голову — соберётся снова':nod?'Держи голову вниз…':asm<1?'Наниты собирают броню…':'Руки над головой — репульсоры и полёт · Голову вниз на 3 с — рассыпаться';
+    asm=Math.min(1,Math.max(0,asm+((have&&!melted)?1:-1)*dt*.35));
 
-    const m={melted,
-      up:{L:L[15].y>L[0].y+.05&&vis[15]>.4,R:L[16].y>L[0].y+.05&&vis[16]>.4},
-      orb:vis[15]>.4&&vis[16]>.4&&L[15].distanceTo(L[16])<sw*.55,
-      wings:vis[15]>.4&&vis[16]>.4&&Math.abs(L[15].x-L[16].x)>sw*3.1};
-    if(m.orb){m.up.L=m.up.R=false}
-
-    const hideLow=have?0:1;
-    P.forEach((p,i)=>{
-      const rad=(p.type==='h'?head.r*.22:p.type==='q'?sw*.14:sw*.11)*p.s*(1+.12*Math.sin(time*3+p.ph));
-      let show=true;
-      if(p.type==='b'&&(vis[p.a]<.35||vis[p.b]<.35))show=false;
-      if(melted){
-        p.vel.y-=3*dt; p.pos.addScaledVector(p.vel,dt);
-        const fl=-1+rad;
-        if(p.pos.y<fl){p.pos.y=fl;p.vel.y=0;p.vel.x*=.9;p.pos.x+=p.slide*dt}
-        show=true;
-      } else if(show){
-        const tg=target(p,time,m,sw,head);
-        p.pos.lerp(tg,1-Math.pow(1-p.k,dt*60));
-        if(p.pos.y<-5)p.pos.copy(tg);
-      }
-      dummy.position.copy(p.pos);
-      dummy.scale.setScalar(show&&!hideLow?rad:0);
-      dummy.updateMatrix(); mesh.setMatrixAt(i,dummy.matrix);
+    const sm=L[11].clone().add(L[12]).multiplyScalar(.5),hmid=L[23].clone().add(L[24]).multiplyScalar(.5);
+    const C={sm,hm:hmid,tl:Math.max(.2,sm.distanceTo(hmid)),roll:Math.atan2(L[12].y-L[11].y,L[12].x-L[11].x),
+      hc:earM.clone().add(new THREE.Vector3(0,sw*.14,0)),hr:Math.max(.08,earW*.85),
+      yaw:Math.max(-1,Math.min(1,(L[0].x-earM.x)/earW*1.5)),pitch:Math.max(-.6,Math.min(.6,(d-base)*1.6)),
+      roll2:0,t,up:up.L||up.R,fly};
+    C.roll=Math.atan2(L[8].y-L[7].y,L[8].x-L[7].x); // наклон головы
+    const bodyRoll=Math.atan2(L[12].y-L[11].y,L[12].x-L[11].x); C.roll=bodyRoll;
+    const hRoll=C.roll; C.roll=bodyRoll;
+    pieces.forEach(p=>{
+      const ok=have&&p.need.every(i=>vis[i]>.35),pop=sstep(p.th,p.th+.08,asm);
+      if(p.root===hg){C.roll=Math.atan2(L[8].y-L[7].y,L[8].x-L[7].x)}else C.roll=bodyRoll;
+      p.upd(sw,C);
+      p.root.scale.multiplyScalar(ok?pop:0);p.root.visible=ok&&pop>.01;
     });
-    mesh.instanceMatrix.needsUpdate=true;
-    renderer.render(scene,cam);
+    reactorLight.intensity=asm>.9?3:0;
+    suit.updateMatrixWorld(true);
+    cen.copy(sm).lerp(hmid,.5); if(!have)cen.set(0,0,0);
+
+    // наниты: роем вокруг тела -> на поверхность брони (и обратно)
+    const ns=sw*.022;
+    nan.forEach((n,i)=>{
+      const pr=Math.min(1,Math.max(0,asm*1.7-n.d*.7)),e=sstep(0,1,pr);
+      sp.set(cen.x+Math.cos(t*n.sp+n.ph)*n.rx*(have?.8:1),cen.y+Math.sin(t*n.sp*1.3+n.ph)*n.ry,Math.sin(t*n.sp+n.ph*2)*.3);
+      const m=parts[n.pi],pa=m.geometry.attributes.position;
+      tp.set(pa.getX(n.vi),pa.getY(n.vi),pa.getZ(n.vi));m.localToWorld(tp);
+      dm.position.copy(sp).lerp(tp,e);
+      dm.rotation.set(t*n.sp+n.ph,t*n.sp*.7,0);
+      dm.scale.setScalar(ns*(1-sstep(.88,1,pr))*(have||asm>0?1:.6)+.0001);
+      dm.updateMatrix();nm.setMatrixAt(i,dm.matrix);
+    });
+    nm.instanceMatrix.needsUpdate=true;
+    comp.render();
   }
-  msg.textContent='Готово!';
+  msg.textContent='Готово! Встань в кадр';
   requestAnimationFrame(loop);
 }
 </script></body></html>
