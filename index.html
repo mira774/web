@@ -1,413 +1,164 @@
 <!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Spatial AR Fighting</title>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Симбионт</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
-  body { width: 100vw; height: 100vh; overflow: hidden; background: #050b14; font-family: system-ui, sans-serif; color: #fff; }
+html,body{margin:0;height:100%;background:#000;color:#cfe;font-family:system-ui,sans-serif;overflow:hidden}
+#stage{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(100vw,calc(100vh*4/3));aspect-ratio:4/3}
+video,canvas{position:absolute;inset:0;width:100%;height:100%}
+video{transform:scaleX(-1);filter:grayscale(1) brightness(.55)}
+#ui{position:fixed;left:0;right:0;bottom:14px;text-align:center;font-size:14px;text-shadow:0 0 6px #000}
+#bar{width:220px;height:6px;margin:8px auto 0;background:#222;border-radius:3px;overflow:hidden}
+#bar i{display:block;height:100%;width:0;background:#7af}
+#go{position:fixed;inset:0;margin:auto;width:260px;height:56px;font-size:18px;border:0;border-radius:28px;background:#111;color:#fff;box-shadow:0 0 30px #5af;cursor:pointer}
+</style></head><body>
+<div id="stage"><video id="v" playsinline muted></video></div>
+<button id="go">Включить камеру</button>
+<div id="ui"><div id="msg">Руку выше головы — шипы · Ладони вместе — шар · Руки в стороны — крылья · Наклони голову и держи 3 с — всё стечёт</div><div id="bar"><i></i></div></div>
 
-  #gameCanvas { display: block; width: 100%; height: 100%; touch-action: none; }
-  #webcam { display: none; }
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+import {PoseLandmarker,FilesetResolver} from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs';
 
-  /* ХП Бары участников */
-  #hp-container {
-    position: fixed; top: 15px; left: 15px; right: 15px; z-index: 10;
-    display: flex; justify-content: space-between; gap: 15px;
-    pointer-events: none;
-  }
+const $=id=>document.getElementById(id), msg=$('msg'), bar=$('bar').firstChild, video=$('v');
+const R=Math.random;
+$('go').onclick=async()=>{ $('go').remove(); try{ await start(); }catch(e){ msg.textContent='Ошибка: '+e.message; } };
 
-  .hp-card {
-    flex: 1; max-width: 280px; background: rgba(10, 20, 30, 0.85);
-    padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(0, 229, 255, 0.3);
-    backdrop-filter: blur(8px);
-  }
+async function start(){
+  msg.textContent='Запрашиваю камеру…';
+  video.srcObject=await navigator.mediaDevices.getUserMedia({video:{width:640,height:480,facingMode:'user'}});
+  await video.play();
+  const A=video.videoWidth/video.videoHeight;
+  $('stage').style.aspectRatio=A;
+  msg.textContent='Загружаю модель тела…';
+  const fs=await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+  const pose=await PoseLandmarker.createFromOptions(fs,{
+    baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',delegate:'GPU'},
+    runningMode:'VIDEO',numPoses:1});
 
-  .hp-bar-bg { width: 100%; height: 16px; background: #222; border-radius: 8px; overflow: hidden; margin-top: 6px; border: 1px solid #444; }
-  .hp-bar-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #ff0055, #ff5500); transition: width 0.2s ease; }
-  .hp-bar-fill.my { background: linear-gradient(90deg, #00e5ff, #00ff66); }
+  // ---------- 3D сцена ----------
+  const renderer=new THREE.WebGLRenderer({alpha:true,antialias:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  $('stage').appendChild(renderer.domElement);
+  const scene=new THREE.Scene();
+  const pm=new THREE.PMREMGenerator(renderer);
+  scene.environment=pm.fromScene(new RoomEnvironment(),.04).texture;
+  const cam=new THREE.OrthographicCamera(-A,A,1,-1,.1,10); cam.position.z=5;
+  const dl=new THREE.DirectionalLight(0x9bf,2); dl.position.set(-2,3,4); scene.add(dl);
+  const pl=new THREE.PointLight(0xffffff,3,10); pl.position.set(2,1,3); scene.add(pl);
+  const resize=()=>{const r=$('stage').getBoundingClientRect();renderer.setSize(r.width,r.height,false)};
+  addEventListener('resize',resize); resize();
 
-  /* Панель управления и подключения */
-  #ui-panel {
-    position: fixed; bottom: 15px; left: 15px; right: 15px; z-index: 10;
-    background: rgba(10, 20, 30, 0.9); padding: 12px 16px; border-radius: 16px;
-    border: 1px solid rgba(0, 229, 255, 0.4); display: flex; flex-direction: column; gap: 8px;
-    backdrop-filter: blur(8px);
-  }
+  // ---------- частицы-симбионт ----------
+  const P=[];
+  const add=o=>P.push({...o,pos:new THREE.Vector3(0,-5,0),vel:new THREE.Vector3(),k:.1+R()*.2,s:.75+R()*.5,ph:R()*6.28,
+    sd:new THREE.Vector3(R()-.5,R()-.5,R()-.5).normalize(),slide:(R()-.5)*.5});
+  // [a,b,кол-во,радиус,рука,предплечье]
+  [[11,13,45,.15,'L',0],[13,15,50,.12,'L',1],[12,14,45,.15,'R',0],[14,16,50,.12,'R',1],
+   [15,19,18,.1,'L',1],[16,20,18,.1,'R',1],
+   [23,25,55,.2,'',0],[25,27,55,.15,'',0],[24,26,55,.2,'',0],[26,28,55,.15,'',0]]
+  .forEach(([a,b,n,r,arm,fore])=>{for(let i=0;i<n;i++)add({type:'b',a,b,r,arm,fore,t:R(),ang:R()*6.28})});
+  for(let i=0;i<190;i++)add({type:'q',u:R(),v:R(),wing:R()<.4,f:R(),g:R()});
+  for(let i=0;i<120;i++)add({type:'h'});
 
-  .row { display: flex; gap: 8px; align-items: center; justify-content: space-between; font-size: 13px; }
-  
-  input[type="text"] {
-    background: #111; border: 1px solid #333; color: #fff; padding: 8px 12px;
-    border-radius: 8px; font-size: 13px; flex: 1; outline: none;
-  }
+  const mesh=new THREE.InstancedMesh(new THREE.SphereGeometry(1,14,14),
+    new THREE.MeshPhysicalMaterial({color:0x07070b,metalness:1,roughness:.13,clearcoat:1,envMapIntensity:1.3}),P.length);
+  mesh.frustumCulled=false; scene.add(mesh);
 
-  .btn {
-    background: #00e5ff; color: #000; border: none; padding: 8px 14px;
-    font-weight: bold; border-radius: 8px; cursor: pointer; font-size: 13px;
-    white-space: nowrap; -webkit-tap-highlight-color: transparent;
-  }
-  .btn:active { transform: scale(0.96); background: #70f0ff; }
-  .btn-weapon { background: #1a2936; color: #00e5ff; border: 1px solid #00e5ff; flex: 1; text-align: center; }
-  .btn-weapon.active { background: #00e5ff; color: #000; }
+  // ---------- состояние ----------
+  const L=Array.from({length:33},()=>new THREE.Vector3()), vis=new Array(33).fill(0);
+  let have=false, melted=false, hold=0, base=null, back=0, lastT=-1;
+  const V=(x,y,z)=>new THREE.Vector3(x,y,z), dummy=new THREE.Object3D();
 
-  #status { font-size: 12px; color: #aaa; text-align: center; }
-  #my-id { color: #00e5ff; font-weight: bold; user-select: all; }
-</style>
-
-<!-- PeerJS и MediaPipe -->
-<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
-</head>
-<body>
-
-<div id="hp-container">
-  <div class="hp-card">
-    <div class="row"><b>ВЫ</b> <span id="my-hp-text">100 HP</span></div>
-    <div class="hp-bar-bg"><div id="my-hp-bar" class="hp-bar-fill my"></div></div>
-  </div>
-  <div class="hp-card">
-    <div class="row"><b>СОПЕРНИК</b> <span id="enemy-hp-text">100 HP</span></div>
-    <div class="hp-bar-bg"><div id="enemy-hp-bar" class="hp-bar-fill"></div></div>
-  </div>
-</div>
-
-<canvas id="gameCanvas"></canvas>
-<video id="webcam" autoplay playsinline muted></video>
-
-<div id="ui-panel">
-  <div class="row">
-    <span>Мой ID: <span id="my-id">Загрузка...</span></span>
-    <button class="btn" onclick="document.getElementById('bgLoader').click()">🖼️ Фон</button>
-    <input type="file" id="bgLoader" accept="image/*" style="display:none">
-  </div>
-  
-  <div class="row">
-    <input type="text" id="peer-input" placeholder="ID друга">
-    <button class="btn" id="connect-btn">Войти в дуэль</button>
-  </div>
-
-  <div class="row">
-    <button class="btn btn-weapon active" onclick="setWeapon('machete', this)">🗡️ Мачете</button>
-    <button class="btn btn-weapon" onclick="setWeapon('bat', this)">🏏 Бита</button>
-    <button class="btn btn-weapon" onclick="setWeapon('sword', this)">⚔️ Меч</button>
-    <button class="btn btn-weapon" onclick="setWeapon('shield', this)">🛡️ Щит</button>
-  </div>
-
-  <div id="status">Запуск камеры...</div>
-</div>
-
-<script>
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-const webcam = document.getElementById('webcam');
-const status = document.getElementById('status');
-const myIdEl = document.getElementById('my-id');
-const peerInput = document.getElementById('peer-input');
-const connectBtn = document.getElementById('connect-btn');
-const bgLoader = document.getElementById('bgLoader');
-
-let W = window.innerWidth, H = window.innerHeight;
-canvas.width = W; canvas.height = H;
-
-window.addEventListener('resize', () => {
-  W = window.innerWidth; H = window.innerHeight;
-  canvas.width = W; canvas.height = H;
-});
-
-// --- 1. СОСТОЯНИЕ ИГРОКОВ ---
-const myPlayer = {
-  x: W * 0.3, y: H * 0.7,
-  hp: 100,
-  weapon: 'machete',
-  weaponX: W * 0.3, weaponY: H * 0.6,
-  prevWX: 0, prevWY: 0,
-  size: 220
-};
-
-const enemyPlayer = {
-  x: W * 0.7, y: H * 0.7,
-  hp: 100,
-  weapon: 'machete',
-  weaponX: W * 0.7, weaponY: H * 0.6,
-  size: 220,
-  active: false
-};
-
-// Текстовые эффекты урона (-20 HP)
-const damageTexts = [];
-
-function addDamageEffect(x, y, amount) {
-  damageTexts.push({ x, y, amount, alpha: 1.0 });
-}
-
-// --- 2. МУЛЬТИПЛЕЕР (PEERJS) ---
-const peer = new Peer();
-let dataConn = null;
-
-peer.on('open', (id) => {
-  myIdEl.textContent = id;
-  status.textContent = "Готов! Скопируйте свой ID или введите ID друга.";
-});
-
-peer.on('connection', (conn) => setupConnection(conn));
-
-connectBtn.addEventListener('click', () => {
-  const targetId = peerInput.value.trim();
-  if (targetId) setupConnection(peer.connect(targetId));
-});
-
-function setupConnection(conn) {
-  dataConn = conn;
-  enemyPlayer.active = true;
-  status.textContent = "⚔️ Дуэль началась! Бейте соперника оружием!";
-
-  conn.on('data', (data) => {
-    if (data.type === 'state') {
-      enemyPlayer.x = data.x;
-      enemyPlayer.y = data.y;
-      enemyPlayer.weaponX = data.wx;
-      enemyPlayer.weaponY = data.wy;
-      enemyPlayer.weapon = data.weapon;
-      enemyPlayer.hp = data.hp;
-      updateHPBars();
-    } else if (data.type === 'hit') {
-      myPlayer.hp = Math.max(0, myPlayer.hp - data.damage);
-      addDamageEffect(myPlayer.x, myPlayer.y - 50, data.damage);
-      updateHPBars();
-      sendState();
-    }
-  });
-
-  conn.on('close', () => {
-    enemyPlayer.active = false;
-    status.textContent = "Соперник вышел из дуэли";
-  });
-}
-
-function sendState() {
-  if (dataConn && dataConn.open) {
-    dataConn.send({
-      type: 'state',
-      x: myPlayer.x, y: myPlayer.y,
-      wx: myPlayer.weaponX, wy: myPlayer.weaponY,
-      weapon: myPlayer.weapon, hp: myPlayer.hp
-    });
-  }
-}
-
-function updateHPBars() {
-  document.getElementById('my-hp-text').textContent = myPlayer.hp + ' HP';
-  document.getElementById('my-hp-bar').style.width = myPlayer.hp + '%';
-
-  document.getElementById('enemy-hp-text').textContent = enemyPlayer.hp + ' HP';
-  document.getElementById('enemy-hp-bar').style.width = enemyPlayer.hp + '%';
-}
-
-// --- 3. СМЕНА ОРУЖИЯ ---
-function setWeapon(type, btnEl) {
-  myPlayer.weapon = type;
-  document.querySelectorAll('.btn-weapon').forEach(b => b.classList.remove('active'));
-  btnEl.classList.add('active');
-  sendState();
-}
-
-// --- 4. УПРАВЛЕНИЕ И АТАКА ---
-let isDragging = false;
-let lastHitTime = 0;
-
-canvas.addEventListener('pointerdown', (e) => {
-  isDragging = true;
-  updatePos(e.clientX, e.clientY);
-});
-
-canvas.addEventListener('pointermove', (e) => {
-  if (isDragging) updatePos(e.clientX, e.clientY);
-});
-
-window.addEventListener('pointerup', () => isDragging = false);
-
-function updatePos(cx, cy) {
-  myPlayer.x = cx;
-  myPlayer.y = cy;
-  
-  // Оружие держится в правой руке с отступом
-  myPlayer.weaponX = cx + 50;
-  myPlayer.weaponY = cy - 30;
-
-  // Проверка скорости удара
-  const speed = Math.hypot(myPlayer.weaponX - myPlayer.prevWX, myPlayer.weaponY - myPlayer.prevWY);
-  myPlayer.prevWX = myPlayer.weaponX;
-  myPlayer.prevWY = myPlayer.weaponY;
-
-  // Проверка попадания по врагу
-  if (enemyPlayer.active && speed > 15 && Date.now() - lastHitTime > 400) {
-    const distToEnemy = Math.hypot(myPlayer.weaponX - enemyPlayer.x, myPlayer.weaponY - enemyPlayer.y);
-    if (distToEnemy < 100) { // Попадание!
-      lastHitTime = Date.now();
-      const dmg = 20;
-      enemyPlayer.hp = Math.max(0, enemyPlayer.hp - dmg);
-      addDamageEffect(enemyPlayer.x, enemyPlayer.y - 50, dmg);
-      updateHPBars();
-
-      if (dataConn) {
-        dataConn.send({ type: 'hit', damage: dmg });
+  function target(p,time,m,sw,head){
+    const t=new THREE.Vector3();
+    if(m.melted) return t;
+    if(p.type==='b'){
+      const a=L[p.a],b=L[p.b],d=b.clone().sub(a);
+      let tt=p.t,r=p.r*sw;
+      if(m.orb&&p.arm){ // шар между ладонями
+        const c=L[15].clone().add(L[16]).multiplyScalar(.5), q=p.sd.clone();
+        const x=q.x*Math.cos(time*2)+q.z*Math.sin(time*2), z=-q.x*Math.sin(time*2)+q.z*Math.cos(time*2);
+        return c.add(V(x,q.y,z).multiplyScalar(sw*.5*(1+.1*Math.sin(time*8+p.ph))));
       }
+      if(m.up[p.arm]&&p.fore){tt=p.t*2.6;r*=(1-.85*p.t)*(1+.3*Math.sin(time*7+p.ph));} // шипы/клинок
+      const pr=V(-d.y,d.x,0).normalize();
+      return a.clone().add(d.multiplyScalar(tt)).add(pr.multiplyScalar(Math.cos(p.ang)*r)).add(V(0,0,Math.sin(p.ang)*r));
     }
-  }
-
-  sendState();
-}
-
-// --- 5. ВЫРЕЗАНИЕ ФОНА КАМЕРЫ (MediaPipe) ---
-const segCanvas = document.createElement('canvas');
-segCanvas.width = 240; segCanvas.height = 240;
-const segCtx = segCanvas.getContext('2d');
-let isSegmentationReady = false;
-
-const selfieSegmentation = new SelfieSegmentation({
-  locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}`
-});
-selfieSegmentation.setOptions({ modelSelection: 1 });
-
-selfieSegmentation.onResults((results) => {
-  segCtx.save();
-  segCtx.clearRect(0, 0, 240, 240);
-  segCtx.drawImage(results.segmentationMask, 0, 0, 240, 240);
-  segCtx.globalCompositeOperation = 'source-in';
-  
-  // Правильное отзеркаливание
-  segCtx.translate(240, 0);
-  segCtx.scale(-1, 1);
-  segCtx.drawImage(results.image, 0, 0, 240, 240);
-  segCtx.restore();
-
-  isSegmentationReady = true;
-});
-
-// --- 6. ОТРИСОВКА ОРУЖИЯ И АРЕНЫ ---
-let bgImage = new Image();
-let hasBg = false;
-
-bgLoader.addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (file) {
-    const reader = new FileReader();
-    reader.onload = (ev) => { bgImage.src = ev.target.result; hasBg = true; };
-    reader.readAsDataURL(file);
-  }
-});
-
-function drawWeapon(x, y, type) {
-  ctx.save();
-  ctx.translate(x, y);
-  
-  if (type === 'machete') {
-    ctx.fillStyle = '#e0e0e0';
-    ctx.fillRect(-5, -40, 10, 50);
-    ctx.fillStyle = '#ff0055';
-    ctx.fillRect(-3, 10, 6, 15);
-  } else if (type === 'bat') {
-    ctx.fillStyle = '#8b4513';
-    ctx.fillRect(-8, -50, 16, 60);
-  } else if (type === 'sword') {
-    ctx.fillStyle = '#00e5ff';
-    ctx.fillRect(-4, -60, 8, 70);
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(-15, 10, 30, 6);
-  } else if (type === 'shield') {
-    ctx.fillStyle = '#444';
-    ctx.beginPath(); ctx.arc(0, 0, 30, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = '#00e5ff'; ctx.lineWidth = 4; ctx.stroke();
-  }
-  ctx.restore();
-}
-
-function render() {
-  ctx.clearRect(0, 0, W, H);
-
-  // Отрисовка фона
-  if (hasBg && bgImage.complete) {
-    ctx.drawImage(bgImage, 0, 0, W, H);
-  } else {
-    // Арена по умолчанию
-    ctx.strokeStyle = '#152238'; ctx.lineWidth = 1;
-    for (let x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-    for (let y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
-  }
-
-  // Отрисовка Соперника
-  if (enemyPlayer.active) {
-    ctx.save();
-    ctx.beginPath();
-    ctx.ellipse(enemyPlayer.x, enemyPlayer.y, 60, 15, 0, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255, 0, 85, 0.3)'; ctx.fill();
-    ctx.restore();
-
-    // Силуэт соперника (рамка или вырезанный видеопоток)
-    ctx.strokeStyle = '#ff0055'; ctx.lineWidth = 3;
-    ctx.strokeRect(enemyPlayer.x - 60, enemyPlayer.y - 180, 120, 180);
-
-    drawWeapon(enemyPlayer.weaponX, enemyPlayer.weaponY, enemyPlayer.weapon);
-  }
-
-  // Отрисовка Моего персонажа
-  ctx.save();
-  ctx.beginPath();
-  ctx.ellipse(myPlayer.x, myPlayer.y, 60, 15, 0, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(0, 229, 255, 0.3)'; ctx.fill();
-  ctx.restore();
-
-  if (isSegmentationReady) {
-    ctx.drawImage(segCanvas, myPlayer.x - 80, myPlayer.y - 200, 160, 200);
-  } else if (webcam.readyState >= 2) {
-    ctx.drawImage(webcam, myPlayer.x - 80, myPlayer.y - 200, 160, 200);
-  }
-
-  drawWeapon(myPlayer.weaponX, myPlayer.weaponY, myPlayer.weapon);
-
-  // Отрисовка цифр урона (-20)
-  for (let i = damageTexts.length - 1; i >= 0; i--) {
-    const dt = damageTexts[i];
-    ctx.fillStyle = `rgba(255, 0, 85, ${dt.alpha})`;
-    ctx.font = 'bold 28px sans-serif';
-    ctx.fillText('-' + dt.amount, dt.x, dt.y);
-    dt.y -= 1.5;
-    dt.alpha -= 0.02;
-    if (dt.alpha <= 0) damageTexts.splice(i, 1);
-  }
-
-  requestAnimationFrame(render);
-}
-
-// --- 7. БЕЗОПАСНЫЙ ЗАПУСК КАМЕРЫ И ИГРЫ ---
-async function start() {
-  render(); // Игра рисуется сразу! Без ожиданий
-
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 320 } },
-      audio: false
-    });
-    webcam.srcObject = stream;
-    await webcam.play();
-    status.textContent = "Камера подключена! Нейросеть запускается...";
-
-    // Фоновый запуск нейросети вырезания фона
-    async function processCamera() {
-      if (webcam.readyState >= 2) {
-        try { await selfieSegmentation.send({ image: webcam }); } catch (e) {}
+    if(p.type==='q'){
+      if(m.wings&&p.wing){ // крылья
+        const s=p.u<.5?0:1, sh=L[s?12:11], w=L[s?16:15];
+        return sh.clone().add(w.clone().sub(sh).multiplyScalar(.2+.8*p.f))
+          .add(V(0,-p.g*sw*.9*(1-p.f),-.1*sw+Math.sin(time*5+p.ph)*.02));
       }
-      requestAnimationFrame(processCamera);
+      const top=L[11].clone().lerp(L[12],p.u), bot=L[23].clone().lerp(L[24],p.u);
+      return top.lerp(bot,p.v).add(V(0,0,sw*.12));
     }
-    processCamera();
-  } catch (err) {
-    status.textContent = "Камера недоступна (управление пальцем работает): " + err.message;
+    const out=head.c.clone().add(p.sd.clone().multiplyScalar(head.r*1.05));
+    if(m.up.L&&m.up.R)out.add(p.sd.clone().multiplyScalar(head.r*.5*Math.max(0,Math.sin(time*6+p.ph*3)))); // корона
+    return out;
   }
-}
 
-start();
-</script>
-</body>
-</html>
+  function loop(now){
+    requestAnimationFrame(loop);
+    const time=now/1000, dt=Math.min(.05,(now-(loop.p||now))/1000); loop.p=now;
+    if(video.currentTime!==lastT){
+      lastT=video.currentTime;
+      const res=pose.detectForVideo(video,now);
+      if(res.landmarks[0]){
+        have=true;
+        res.landmarks[0].forEach((l,i)=>{
+          const tp=V((.5-l.x)*2*A,(.5-l.y)*2,-l.z*A*1.2);
+          L[i].lerp(tp,.55); vis[i]=l.visibility;
+        });
+      } else have=false;
+    }
+    if(!have){msg.textContent='Встань в кадр так, чтобы было видно тело';}
+    const sw=Math.max(.15,L[11].distanceTo(L[12]));
+    const earM=L[7].clone().add(L[8]).multiplyScalar(.5);
+    const head={c:earM.clone().add(V(0,sw*.12,0)),r:Math.max(.08,L[7].distanceTo(L[8])*.85)};
+
+    // жест головой: наклон + 3 секунды
+    const d=(earM.y-L[0].y)/sw;
+    if(base===null)base=d;
+    const nod=d>base+.12;
+    if(!nod&&!melted)base+=(d-base)*.03;
+    if(nod&&!melted){hold+=dt; if(hold>=3){melted=true;hold=0;P.forEach(p=>{p.vel.set((R()-.5)*.5,R()*.2,0)})}}
+    else if(!nod){hold=0; if(melted){back+=dt; if(back>1){melted=false;back=0}}} else back=0;
+    bar.style.width=(melted?100:hold/3*100)+'%';
+    if(have)msg.textContent=melted?'Всё стекло! Подними голову — симбионт вернётся':(nod?'Держи голову…':'Руку выше головы — шипы · Ладони вместе — шар · Руки в стороны — крылья · Наклони голову на 3 с — всё стечёт');
+
+    const m={melted,
+      up:{L:L[15].y>L[0].y+.05&&vis[15]>.4,R:L[16].y>L[0].y+.05&&vis[16]>.4},
+      orb:vis[15]>.4&&vis[16]>.4&&L[15].distanceTo(L[16])<sw*.55,
+      wings:vis[15]>.4&&vis[16]>.4&&Math.abs(L[15].x-L[16].x)>sw*3.1};
+    if(m.orb){m.up.L=m.up.R=false}
+
+    const hideLow=have?0:1;
+    P.forEach((p,i)=>{
+      const rad=(p.type==='h'?head.r*.22:p.type==='q'?sw*.14:sw*.11)*p.s*(1+.12*Math.sin(time*3+p.ph));
+      let show=true;
+      if(p.type==='b'&&(vis[p.a]<.35||vis[p.b]<.35))show=false;
+      if(melted){
+        p.vel.y-=3*dt; p.pos.addScaledVector(p.vel,dt);
+        const fl=-1+rad;
+        if(p.pos.y<fl){p.pos.y=fl;p.vel.y=0;p.vel.x*=.9;p.pos.x+=p.slide*dt}
+        show=true;
+      } else if(show){
+        const tg=target(p,time,m,sw,head);
+        p.pos.lerp(tg,1-Math.pow(1-p.k,dt*60));
+        if(p.pos.y<-5)p.pos.copy(tg);
+      }
+      dummy.position.copy(p.pos);
+      dummy.scale.setScalar(show&&!hideLow?rad:0);
+      dummy.updateMatrix(); mesh.setMatrixAt(i,dummy.matrix);
+    });
+    mesh.instanceMatrix.needsUpdate=true;
+    renderer.render(scene,cam);
+  }
+  msg.textContent='Готово!';
+  requestAnimationFrame(loop);
+}
+</script></body></html>
